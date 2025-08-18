@@ -1,12 +1,13 @@
-from fastapi import FastAPI, Request, Form, Query
+from fastapi import FastAPI, Request, Form, Query, HTTPException
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse, RedirectResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, validator
 from app.processor import process_and_transcribe, progress_store, get_task_result, get_all_videos
 from app.settings import get_api_key, save_api_key, get_openai_api_key, save_openai_api_key, get_model_config
-from app.database import init_database, get_database_session
+from app.database import init_database, get_database_session, QASession, QAExchange, AnswerFeedback
 from app.migration import MigrationManager
 from app.search import SearchManager, SearchResult
+from app.rag_service import RAGService
 import os
 import sys
 import argparse
@@ -14,8 +15,8 @@ import uuid
 import json
 import asyncio
 import logging
-from datetime import datetime
-from typing import Optional, List
+from datetime import datetime, timezone
+from typing import Optional, List, Dict
 
 # Pydantic models for search API
 class SearchRequest(BaseModel):
@@ -44,6 +45,75 @@ class SearchResponse(BaseModel):
     total_found: int
     has_more: bool
     query_time_ms: float
+
+# Pydantic models for Q&A API
+class AskRequest(BaseModel):
+    question: str
+    session_id: Optional[str] = None
+    
+    @validator('question')
+    def question_must_not_be_empty(cls, v):
+        if not v or not v.strip():
+            raise ValueError('Question cannot be empty')
+        return v.strip()
+
+class SourceResponse(BaseModel):
+    video_id: str
+    chunk_id: int
+    start_ms: int
+    end_ms: int
+    text: str
+    relevance_score: float
+
+class AskResponse(BaseModel):
+    question: str
+    answer: str
+    sources: List[SourceResponse]
+    confidence_score: float
+    response_time_ms: int
+    session_id: str
+
+class FeedbackRequest(BaseModel):
+    exchange_id: str
+    rating: int
+    feedback_text: Optional[str] = None
+    feedback_type: Optional[str] = None
+    
+    @validator('rating')
+    def rating_must_be_valid(cls, v):
+        if v < 1 or v > 5:
+            raise ValueError('Rating must be between 1 and 5')
+        return v
+
+class FeedbackResponse(BaseModel):
+    success: bool
+    feedback_id: Optional[str] = None
+    message: Optional[str] = None
+
+class QAExchangeResponse(BaseModel):
+    id: str
+    question: str
+    answer: str
+    sources: List[Dict]
+    timestamp: str
+    response_time_ms: Optional[int] = None
+
+class HistoryResponse(BaseModel):
+    session_id: str
+    exchanges: List[QAExchangeResponse]
+    total_count: int
+    has_more: bool
+
+class QASessionResponse(BaseModel):
+    id: str
+    user_id: Optional[str] = None
+    created_at: str
+    last_activity: str
+    exchange_count: int
+
+class SessionsResponse(BaseModel):
+    sessions: List[QASessionResponse]
+    total_count: int
 
 app = FastAPI()
 
@@ -486,6 +556,222 @@ async def run_migration():
             "success": False,
             "error": f"Migration failed: {str(e)}"
         }, status_code=500)
+
+# Q&A API Endpoints
+
+@app.post("/api/ask", response_model=AskResponse)
+async def ask_question(ask_request: AskRequest):
+    """
+    Ask a question and get an AI-generated answer with sources.
+    
+    Uses RAG (Retrieval-Augmented Generation) to find relevant context
+    and generate comprehensive answers with source attribution.
+    """
+    try:
+        # Check OpenAI API key
+        if not get_openai_api_key():
+            raise HTTPException(
+                status_code=500,
+                detail="OpenAI API key not configured. Please set it in settings."
+            )
+        
+        # Initialize RAG service and process question
+        rag_service = RAGService()
+        result = rag_service.ask(
+            question=ask_request.question,
+            session_id=ask_request.session_id
+        )
+        
+        # Convert sources to response format
+        source_responses = [
+            SourceResponse(
+                video_id=source["video_id"],
+                chunk_id=source["chunk_id"],
+                start_ms=source["start_ms"],
+                end_ms=source["end_ms"],
+                text=source["text"],
+                relevance_score=source["relevance_score"]
+            ) for source in result.sources
+        ]
+        
+        return AskResponse(
+            question=result.question,
+            answer=result.answer,
+            sources=source_responses,
+            confidence_score=result.confidence_score,
+            response_time_ms=result.response_time_ms,
+            session_id=result.session_id
+        )
+        
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error: {str(e)}"
+        )
+
+@app.get("/api/qa/history", response_model=HistoryResponse)
+async def get_qa_history(
+    session_id: str = Query(..., description="Session ID to get history for"),
+    limit: int = Query(20, ge=1, le=100, description="Number of exchanges to return"),
+    offset: int = Query(0, ge=0, description="Number of exchanges to skip")
+):
+    """
+    Get Q&A conversation history for a specific session.
+    
+    Returns chronological list of questions and answers with pagination.
+    """
+    try:
+        session = get_database_session()
+        
+        # Get total count
+        total_count = session.query(QAExchange).filter(
+            QAExchange.session_id == session_id
+        ).count()
+        
+        # Get exchanges with pagination
+        exchanges = session.query(QAExchange).filter(
+            QAExchange.session_id == session_id
+        ).order_by(QAExchange.timestamp).offset(offset).limit(limit).all()
+        
+        session.close()
+        
+        # Convert to response format
+        exchange_responses = []
+        for exchange in exchanges:
+            sources = json.loads(exchange.sources) if exchange.sources else []
+            
+            exchange_responses.append(QAExchangeResponse(
+                id=exchange.id,
+                question=exchange.question,
+                answer=exchange.answer,
+                sources=sources,
+                timestamp=exchange.timestamp.isoformat(),
+                response_time_ms=exchange.response_time_ms
+            ))
+        
+        has_more = (offset + len(exchanges)) < total_count
+        
+        return HistoryResponse(
+            session_id=session_id,
+            exchanges=exchange_responses,
+            total_count=total_count,
+            has_more=has_more
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get Q&A history: {str(e)}"
+        )
+
+@app.post("/api/qa/feedback", response_model=FeedbackResponse)
+async def submit_feedback(feedback_request: FeedbackRequest):
+    """
+    Submit feedback for a Q&A exchange.
+    
+    Allows users to rate answers and provide qualitative feedback
+    to improve the system's performance.
+    """
+    try:
+        session = get_database_session()
+        
+        # Verify exchange exists
+        exchange = session.query(QAExchange).filter_by(
+            id=feedback_request.exchange_id
+        ).first()
+        
+        if not exchange:
+            session.close()
+            raise HTTPException(
+                status_code=404,
+                detail=f"Exchange {feedback_request.exchange_id} not found"
+            )
+        
+        # Create feedback record
+        feedback_id = f"feedback_{uuid.uuid4().hex[:12]}"
+        feedback = AnswerFeedback(
+            id=feedback_id,
+            exchange_id=feedback_request.exchange_id,
+            rating=feedback_request.rating,
+            feedback_text=feedback_request.feedback_text,
+            feedback_type=feedback_request.feedback_type,
+            created_at=datetime.now(timezone.utc)
+        )
+        
+        session.add(feedback)
+        session.commit()
+        session.close()
+        
+        return FeedbackResponse(
+            success=True,
+            feedback_id=feedback_id,
+            message="Feedback submitted successfully"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to submit feedback: {str(e)}"
+        )
+
+@app.get("/api/qa/sessions", response_model=SessionsResponse)
+async def get_qa_sessions(
+    user_id: Optional[str] = Query(None, description="Filter by user ID"),
+    limit: int = Query(20, ge=1, le=100, description="Number of sessions to return"),
+    offset: int = Query(0, ge=0, description="Number of sessions to skip")
+):
+    """
+    Get list of Q&A sessions with basic statistics.
+    
+    Returns sessions ordered by last activity with exchange counts.
+    """
+    try:
+        session = get_database_session()
+        
+        # Build query
+        query = session.query(QASession)
+        if user_id:
+            query = query.filter(QASession.user_id == user_id)
+        
+        # Get total count
+        total_count = query.count()
+        
+        # Get sessions with pagination
+        sessions = query.order_by(
+            QASession.last_activity.desc()
+        ).offset(offset).limit(limit).all()
+        
+        # Convert to response format with exchange counts
+        session_responses = []
+        for qa_session in sessions:
+            exchange_count = session.query(QAExchange).filter(
+                QAExchange.session_id == qa_session.id
+            ).count()
+            
+            session_responses.append(QASessionResponse(
+                id=qa_session.id,
+                user_id=qa_session.user_id,
+                created_at=qa_session.created_at.isoformat(),
+                last_activity=qa_session.last_activity.isoformat(),
+                exchange_count=exchange_count
+            ))
+        
+        session.close()
+        
+        return SessionsResponse(
+            sessions=session_responses,
+            total_count=total_count
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get Q&A sessions: {str(e)}"
+        )
 
 def run_migration_cli():
     """CLI function to run migration."""
