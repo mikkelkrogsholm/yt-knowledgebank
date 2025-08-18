@@ -34,7 +34,7 @@ YouTube Knowledgebank is an intelligent knowledge extraction and retrieval syste
 ### Key Features
 - **Real-time Progress Tracking**: Server-Sent Events for download and transcription progress
 - **Responsive Design**: Side-by-side layout (desktop) and stacked layout (mobile)
-- **Docker Containerization**: Complete Docker setup for easy deployment
+- **Docker-First Development**: All development and deployment runs in Docker containers
 - **Secure API Key Management**: Settings stored locally, never committed to git
 
 ## Technology Stack
@@ -68,13 +68,31 @@ See `context/git-strategy.md` for detailed development workflow, security guidel
 - All user data in `/data/` directory is gitignored
 - Never commit sensitive information
 
-## Quick Start
+## Quick Start (Docker-First Approach)
 ```bash
 # Clone and start
 git clone git@github.com:mikkelkrogsholm/yt-knowledgebank.git
 cd yt-knowledgebank
-docker-compose up --build
+docker compose up --build
 
 # Access at http://localhost:8765
 # Configure ElevenLabs API key in Settings
+```
+
+## Development Environment (Docker)
+```bash
+# All development runs in Docker containers
+# No need to install Python, dependencies, or configure local environment
+
+# Start development environment
+docker compose up --build
+
+# Run tests in container
+docker compose exec app pytest
+
+# Access container shell for debugging
+docker compose exec app bash
+
+# View logs
+docker compose logs -f app
 ```
