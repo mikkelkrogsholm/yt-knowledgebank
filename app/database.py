@@ -12,7 +12,8 @@ from sqlalchemy import (
     DateTime, 
     Text, 
     ForeignKey,
-    Index
+    Index,
+    Float
 )
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship, Session
 from sqlalchemy.pool import StaticPool
@@ -116,6 +117,228 @@ class Speaker(Base):
     
     def __repr__(self):
         return f"<Speaker(id={self.id}, video_id='{self.video_id}', speaker_id='{self.speaker_id}')>"
+
+
+class Entity(Base):
+    """
+    Entity model representing extracted entities from transcripts.
+    
+    Entities can be people, books, concepts, companies, places, products, etc.
+    that are mentioned in the video transcripts.
+    """
+    __tablename__ = 'entities'
+    
+    # Primary key
+    id = Column(String, primary_key=True, nullable=False)
+    
+    # Entity information
+    name = Column(String, nullable=False)
+    type = Column(String, nullable=False)  # person, book, concept, company, place, product, technology
+    description = Column(Text, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    
+    # Relationship to entity mentions
+    mentions = relationship(
+        "EntityMention", 
+        back_populates="entity", 
+        cascade="all, delete-orphan"
+    )
+    
+    # Index for efficient querying by type and name
+    __table_args__ = (
+        Index('idx_entity_type', 'type'),
+        Index('idx_entity_name', 'name'),
+        Index('idx_entity_type_name', 'type', 'name'),
+    )
+    
+    def __repr__(self):
+        return f"<Entity(id='{self.id}', name='{self.name}', type='{self.type}')>"
+
+
+class EntityMention(Base):
+    """
+    EntityMention model representing specific mentions of entities in transcript chunks.
+    
+    Links entities to specific locations in transcripts with confidence scores and context.
+    """
+    __tablename__ = 'entity_mentions'
+    
+    # Primary key
+    id = Column(String, primary_key=True, nullable=False)
+    
+    # Foreign keys
+    entity_id = Column(String, ForeignKey('entities.id'), nullable=False)
+    chunk_id = Column(Integer, ForeignKey('transcript_chunks.id'), nullable=False)
+    
+    # Mention metadata
+    confidence = Column(Float, nullable=False)  # 0.0 to 1.0
+    context = Column(Text, nullable=True)  # Surrounding text that provides context
+    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    
+    # Relationships
+    entity = relationship("Entity", back_populates="mentions")
+    chunk = relationship("TranscriptChunk")
+    
+    # Index for efficient querying
+    __table_args__ = (
+        Index('idx_mention_entity', 'entity_id'),
+        Index('idx_mention_chunk', 'chunk_id'),
+        Index('idx_mention_confidence', 'confidence'),
+        Index('idx_mention_entity_chunk', 'entity_id', 'chunk_id'),
+    )
+    
+    def __repr__(self):
+        return f"<EntityMention(id='{self.id}', entity_id='{self.entity_id}', chunk_id={self.chunk_id})>"
+
+
+class EntityRelationship(Base):
+    """
+    EntityRelationship model representing relationships between entities.
+    
+    Used for building the knowledge graph by tracking how entities are connected
+    through co-occurrence, influences, recommendations, etc.
+    """
+    __tablename__ = 'entity_relationships'
+    
+    # Primary key
+    id = Column(String, primary_key=True, nullable=False)
+    
+    # Foreign keys to entities
+    entity1_id = Column(String, ForeignKey('entities.id'), nullable=False)
+    entity2_id = Column(String, ForeignKey('entities.id'), nullable=False)
+    
+    # Relationship metadata
+    relationship_type = Column(String, nullable=False)  # mentions_together, influences, recommends, discusses
+    strength = Column(Float, nullable=False)  # 0.0 to 1.0
+    evidence = Column(Text, nullable=True)  # Context supporting the relationship
+    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    
+    # Relationships
+    entity1 = relationship("Entity", foreign_keys=[entity1_id])
+    entity2 = relationship("Entity", foreign_keys=[entity2_id])
+    
+    # Index for efficient querying
+    __table_args__ = (
+        Index('idx_relationship_entity1', 'entity1_id'),
+        Index('idx_relationship_entity2', 'entity2_id'),
+        Index('idx_relationship_type', 'relationship_type'),
+        Index('idx_relationship_strength', 'strength'),
+        Index('idx_relationship_entities', 'entity1_id', 'entity2_id'),
+    )
+    
+    def __repr__(self):
+        return f"<EntityRelationship(id='{self.id}', entity1_id='{self.entity1_id}', entity2_id='{self.entity2_id}', type='{self.relationship_type}')>"
+
+
+class Topic(Base):
+    """
+    Topic model representing content topics with hierarchical structure.
+    
+    Topics organize video content into coherent categories and can have
+    parent-child relationships for hierarchical organization.
+    """
+    __tablename__ = 'topics'
+    
+    # Primary key
+    id = Column(String, primary_key=True, nullable=False)
+    
+    # Topic information
+    name = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    parent_topic_id = Column(String, ForeignKey('topics.id'), nullable=True)
+    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    
+    # Self-referential relationship for hierarchy
+    parent_topic = relationship("Topic", remote_side=[id], back_populates="child_topics")
+    child_topics = relationship("Topic", back_populates="parent_topic")
+    
+    # Relationship to video topics
+    video_topics = relationship(
+        "VideoTopic",
+        back_populates="topic",
+        cascade="all, delete-orphan"
+    )
+    
+    # Index for efficient querying
+    __table_args__ = (
+        Index('idx_topic_name', 'name'),
+        Index('idx_topic_parent', 'parent_topic_id'),
+    )
+    
+    def __repr__(self):
+        return f"<Topic(id='{self.id}', name='{self.name}', parent_id='{self.parent_topic_id}')>"
+
+
+class VideoTopic(Base):
+    """
+    VideoTopic model representing the association between videos and topics.
+    
+    Links videos to topics with relevance scores indicating how well
+    the topic represents the video content.
+    """
+    __tablename__ = 'video_topics'
+    
+    # Composite primary key
+    video_id = Column(String, ForeignKey('videos.id'), primary_key=True)
+    topic_id = Column(String, ForeignKey('topics.id'), primary_key=True)
+    
+    # Association metadata
+    relevance_score = Column(Float, nullable=False)  # 0.0 to 1.0
+    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    
+    # Relationships
+    video = relationship("Video")
+    topic = relationship("Topic", back_populates="video_topics")
+    
+    # Index for efficient querying
+    __table_args__ = (
+        Index('idx_video_topic_video', 'video_id'),
+        Index('idx_video_topic_topic', 'topic_id'),
+        Index('idx_video_topic_relevance', 'relevance_score'),
+    )
+    
+    def __repr__(self):
+        return f"<VideoTopic(video_id='{self.video_id}', topic_id='{self.topic_id}', relevance={self.relevance_score})>"
+
+
+class Summary(Base):
+    """
+    Summary model representing AI-generated summaries of video content.
+    
+    Supports multiple summary types: video-level, entity-focused, topic-focused,
+    and actionable items extraction.
+    """
+    __tablename__ = 'summaries'
+    
+    # Primary key
+    id = Column(String, primary_key=True, nullable=False)
+    
+    # Foreign keys
+    video_id = Column(String, ForeignKey('videos.id'), nullable=False)
+    entity_id = Column(String, ForeignKey('entities.id'), nullable=True)
+    topic_id = Column(String, ForeignKey('topics.id'), nullable=True)
+    
+    # Summary metadata
+    summary_type = Column(String, nullable=False)  # video, topic, entity, actionable
+    content = Column(Text, nullable=False)
+    generated_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    
+    # Relationships
+    video = relationship("Video")
+    entity = relationship("Entity")
+    topic = relationship("Topic")
+    
+    # Index for efficient querying
+    __table_args__ = (
+        Index('idx_summary_video', 'video_id'),
+        Index('idx_summary_type', 'summary_type'),
+        Index('idx_summary_entity', 'entity_id'),
+        Index('idx_summary_topic', 'topic_id'),
+        Index('idx_summary_video_type', 'video_id', 'summary_type'),
+    )
+    
+    def __repr__(self):
+        return f"<Summary(id='{self.id}', video_id='{self.video_id}', type='{self.summary_type}')>"
 
 
 class DatabaseManager:
