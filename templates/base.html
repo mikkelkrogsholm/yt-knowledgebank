@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}YouTube Knowledgebank{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <nav class="bg-white shadow-sm border-b border-gray-200">
+        <div class="max-w-6xl mx-auto px-4 py-3">
+            <div class="flex justify-between items-center">
+                <h1 class="text-xl font-semibold text-gray-800">YouTube Knowledgebank</h1>
+                <div class="flex gap-6">
+                    <a href="/" class="text-gray-700 hover:text-gray-900 transition-colors {% if request.url.path == '/' %}font-medium text-blue-600{% endif %}">Overview</a>
+                    <a href="/process" class="text-gray-700 hover:text-gray-900 transition-colors {% if request.url.path == '/process' %}font-medium text-blue-600{% endif %}">Process</a>
+                    <a href="/settings" class="text-gray-700 hover:text-gray-900 transition-colors {% if request.url.path == '/settings' %}font-medium text-blue-600{% endif %}">Settings</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-6xl mx-auto px-4 py-8">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="mt-auto py-6 text-center text-gray-500 text-sm">
+        <p>YouTube Knowledgebank - Extract and organize knowledge from YouTube videos</p>
+    </footer>
+</body>
+</html>

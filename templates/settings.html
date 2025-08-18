@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - YouTube MP3 Processor{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <div class="bg-white rounded-lg shadow-md p-8">
+        <div class="flex items-center justify-between mb-6">
+            <h2 class="text-2xl font-bold text-gray-800">Settings</h2>
+            <a href="/" class="text-sm text-gray-600 hover:text-gray-800 flex items-center gap-1">
+                ← Back to Home
+            </a>
+        </div>
+        
+        {% if not has_key %}
+        <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6">
+            <div class="flex">
+                <div class="ml-3">
+                    <p class="text-sm text-yellow-700">
+                        <strong>⚠️ API Key Required:</strong> You need to configure your ElevenLabs API key to enable transcription functionality.
+                    </p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if success %}
+        <div class="bg-green-50 border-l-4 border-green-400 p-4 mb-6">
+            <div class="flex">
+                <div class="ml-3">
+                    <p class="text-sm text-green-700">
+                        <strong>✅ Success:</strong> {{ success }}
+                    </p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if error %}
+        <div class="bg-red-50 border-l-4 border-red-400 p-4 mb-6">
+            <div class="flex">
+                <div class="ml-3">
+                    <p class="text-sm text-red-700">
+                        <strong>❌ Error:</strong> {{ error }}
+                    </p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        <form method="post" action="/settings/save" class="space-y-6">
+            <div>
+                <label for="api_key" class="block text-sm font-medium text-gray-700 mb-2">
+                    ElevenLabs API Key
+                </label>
+                <input 
+                    type="password" 
+                    id="api_key"
+                    name="api_key" 
+                    {% if api_key_masked %}value="{{ api_key_masked }}"{% endif %}
+                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition-colors"
+                    placeholder="sk-..."
+                    required
+                >
+                <div class="mt-2 text-xs text-gray-500 space-y-1">
+                    <p>• Get your API key from <a href="https://elevenlabs.io/settings" target="_blank" class="text-blue-500 hover:underline">elevenlabs.io/settings</a></p>
+                    <p>• Your API key is stored securely and only used for transcription</p>
+                    {% if has_key %}
+                    <p class="text-green-600">• ✅ API key is currently configured</p>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <button 
+                type="submit" 
+                class="w-full bg-gradient-to-r from-primary to-secondary text-white py-3 px-6 rounded-lg font-medium hover:from-primary/90 hover:to-secondary/90 transition-all transform hover:scale-[1.02] focus:ring-2 focus:ring-primary focus:ring-offset-2"
+            >
+                Save API Key
+            </button>
+        </form>
+
+        <div class="mt-8 p-4 bg-gray-50 rounded-lg">
+            <h3 class="text-sm font-medium text-gray-700 mb-2">About Transcription</h3>
+            <ul class="text-xs text-gray-600 space-y-1">
+                <li>• Uses ElevenLabs Scribe v1 model for high-accuracy transcription</li>
+                <li>• Supports 99 languages with automatic language detection</li>
+                <li>• Provides word-level timestamps and speaker identification</li>
+                <li>• Tags audio events like laughter and applause</li>
+                <li>• Files are processed securely and stored locally</li>
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}

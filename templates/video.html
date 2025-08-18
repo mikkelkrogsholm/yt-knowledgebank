@@ -1,0 +1,420 @@
+{% extends "base.html" %}
+
+{% block title %}{{ video.title|default('Video') }} - YouTube Knowledgebank{% endblock %}
+
+{% block content %}
+<!-- Back button -->
+<div class="mb-6 max-w-7xl mx-auto px-4">
+    <a href="/" class="text-blue-600 hover:text-blue-800 inline-flex items-center gap-1 text-sm">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+        </svg>
+        Back to Overview
+    </a>
+</div>
+
+<!-- Mobile Layout (stacked) -->
+<div class="lg:hidden max-w-4xl mx-auto px-4">
+    <!-- YouTube Player -->
+    {% if video.video_id %}
+    <div class="bg-white rounded-lg border border-gray-200 p-4 mb-6">
+        <iframe id="ytPlayer" 
+                src="https://www.youtube.com/embed/{{ video.video_id }}?enablejsapi=1&rel=0&modestbranding=1"
+                frameborder="0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowfullscreen
+                class="w-full h-64 rounded-lg">
+        </iframe>
+    </div>
+    {% endif %}
+    
+    <!-- Video Info -->
+    <div class="bg-white rounded-lg border border-gray-200 p-4 mb-6">
+        <h1 class="text-xl font-bold text-gray-900 mb-3">{{ video.title|default('Untitled Video') }}</h1>
+        <div class="grid grid-cols-2 gap-3 text-sm">
+            <div>
+                <span class="text-gray-500">Duration:</span>
+                <div class="font-medium">{{ video.duration_formatted|default('Unknown') }}</div>
+            </div>
+            <div>
+                <span class="text-gray-500">Uploader:</span>
+                <div class="font-medium">{{ video.uploader|default('Unknown') }}</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Transcript -->
+    <div class="bg-white rounded-lg border border-gray-200 p-4">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-lg font-semibold text-gray-900">Transcript</h2>
+            <button onclick="copyTranscript()" 
+                    class="text-blue-600 hover:text-blue-800 text-sm px-2 py-1 border border-blue-200 rounded hover:bg-blue-50">
+                Copy All
+            </button>
+        </div>
+        <div id="transcriptContentMobile" class="space-y-3">
+            {% if transcript %}
+                <p class="text-gray-500 text-sm">Loading transcript...</p>
+            {% else %}
+                <p class="text-gray-500 text-center py-8">No transcript available for this video.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Desktop Layout (side-by-side) -->
+<div class="hidden lg:block">
+    <div class="max-w-7xl mx-auto px-4">
+        <div class="grid grid-cols-5 gap-6">
+            
+            <!-- Left Column: Video Player (2/5 width) -->
+            <div class="col-span-2">
+                <div class="sticky top-6">
+                    <!-- YouTube Player -->
+                    {% if video.video_id %}
+                    <div class="bg-white rounded-lg border border-gray-200 p-6 mb-4">
+                        <iframe id="ytPlayerDesktop" 
+                                src="https://www.youtube.com/embed/{{ video.video_id }}?enablejsapi=1&rel=0&modestbranding=1"
+                                frameborder="0"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                allowfullscreen
+                                class="w-full h-64 rounded-lg">
+                        </iframe>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Video Info -->
+                    <div class="bg-white rounded-lg border border-gray-200 p-6">
+                        <h1 class="text-xl font-bold text-gray-900 mb-4">{{ video.title|default('Untitled Video') }}</h1>
+                        
+                        <div class="space-y-3 text-sm">
+                            <div class="flex justify-between">
+                                <span class="text-gray-500">Duration:</span>
+                                <span class="font-medium">{{ video.duration_formatted|default('Unknown') }}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-500">Uploader:</span>
+                                <span class="font-medium">{{ video.uploader|default('Unknown') }}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-500">Views:</span>
+                                <span class="font-medium">{{ '{:,}'.format(video.view_count) if video.view_count else 'N/A' }}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-500">Processed:</span>
+                                <span class="font-medium">{{ video.processed_date_formatted|default('Unknown') }}</span>
+                            </div>
+                        </div>
+                        
+                        {% if video.word_count or video.speaker_count %}
+                        <div class="mt-4 pt-4 border-t border-gray-200">
+                            <div class="flex gap-4 text-sm">
+                                {% if video.word_count %}
+                                <div class="flex items-center gap-1 text-gray-600">
+                                    <span>📝</span>
+                                    <span>{{ video.word_count }} words</span>
+                                </div>
+                                {% endif %}
+                                {% if video.speaker_count %}
+                                <div class="flex items-center gap-1 text-gray-600">
+                                    <span>👥</span>
+                                    <span>{{ video.speaker_count }} speakers</span>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Right Column: Transcript (3/5 width) -->
+            <div class="col-span-3">
+                <div class="bg-white rounded-lg border border-gray-200 p-6">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-lg font-semibold text-gray-900">Transcript</h2>
+                        <div class="flex gap-2">
+                            <input type="text" 
+                                   id="transcriptSearch"
+                                   placeholder="Search in transcript..." 
+                                   class="px-3 py-1 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            <button onclick="copyTranscript()" 
+                                    class="text-blue-600 hover:text-blue-800 text-sm px-3 py-1 border border-blue-200 rounded-md hover:bg-blue-50 transition-colors">
+                                Copy All
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div id="transcriptContent" class="space-y-3 max-h-screen overflow-y-auto pr-2">
+                        {% if transcript %}
+                            <p class="text-gray-500 text-sm">Loading transcript...</p>
+                        {% else %}
+                            <p class="text-gray-500 text-center py-8">No transcript available for this video.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+        </div>
+    </div>
+</div>
+
+<script>
+// Load transcript data
+const transcriptData = {{ transcript|tojson if transcript else '{}' }};
+const videoTitle = {{ video.title|tojson if video.title else '""' }};
+const hasVideoId = {{ 'true' if video.video_id else 'false' }};
+
+// YouTube Player API
+let player = null;
+let playerReady = false;
+
+// Load YouTube IFrame API
+if (hasVideoId) {
+    const tag = document.createElement('script');
+    tag.src = "https://www.youtube.com/iframe_api";
+    const firstScriptTag = document.getElementsByTagName('script')[0];
+    firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+}
+
+// YouTube API callback
+function onYouTubeIframeAPIReady() {
+    // Try to initialize both players - whichever exists will work
+    const desktopPlayer = document.getElementById('ytPlayerDesktop');
+    const mobilePlayer = document.getElementById('ytPlayer');
+    
+    if (desktopPlayer) {
+        player = new YT.Player('ytPlayerDesktop', {
+            events: {
+                'onReady': function(event) {
+                    playerReady = true;
+                    console.log('Desktop YouTube player ready');
+                    // If there's a pending seek, execute it now
+                    if (window.pendingSeekTime !== undefined) {
+                        console.log('Executing pending seek to', window.pendingSeekTime);
+                        player.seekTo(window.pendingSeekTime, true);
+                        window.pendingSeekTime = undefined;
+                    }
+                }
+            }
+        });
+    } else if (mobilePlayer) {
+        player = new YT.Player('ytPlayer', {
+            events: {
+                'onReady': function(event) {
+                    playerReady = true;
+                    console.log('Mobile YouTube player ready');
+                    // If there's a pending seek, execute it now
+                    if (window.pendingSeekTime !== undefined) {
+                        console.log('Executing pending seek to', window.pendingSeekTime);
+                        player.seekTo(window.pendingSeekTime, true);
+                        window.pendingSeekTime = undefined;
+                    }
+                }
+            }
+        });
+    }
+}
+
+// Make this function global for YouTube API
+window.onYouTubeIframeAPIReady = onYouTubeIframeAPIReady;
+
+// Jump to specific time in video
+function seekToTime(seconds) {
+    if (player && playerReady && player.seekTo) {
+        player.seekTo(seconds, true);
+        console.log(`Seeking to ${seconds} seconds`);
+        
+        // Scroll video into view on mobile only
+        if (window.innerWidth < 1024) {
+            const videoElement = document.getElementById('ytPlayer');
+            if (videoElement) {
+                videoElement.scrollIntoView({ 
+                    behavior: 'smooth', 
+                    block: 'center' 
+                });
+            }
+        }
+    } else {
+        console.log('Player not ready yet, queuing seek to', seconds);
+        // Store the seek time to try again when player is ready
+        window.pendingSeekTime = seconds;
+    }
+}
+
+// Format timestamp helper
+function formatTime(seconds) {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    const ms = Math.floor((seconds % 1) * 1000);
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
+}
+
+// Display transcript with clickable cards
+function displayTranscript(transcriptData) {
+    const desktopContainer = document.getElementById('transcriptContent');
+    const mobileContainer = document.getElementById('transcriptContentMobile');
+    
+    [desktopContainer, mobileContainer].forEach(container => {
+        if (!container) return;
+        
+        container.innerHTML = '';
+        
+        if (!transcriptData || (!transcriptData.words && !transcriptData.text)) {
+            container.innerHTML = '<p class="text-gray-500 text-center py-8">No transcript data available</p>';
+            return;
+        }
+        
+        // Display word-level transcript if available
+        if (transcriptData.words && Array.isArray(transcriptData.words)) {
+            let currentSpeaker = null;
+            let currentParagraph = null;
+            let currentWords = [];
+            let startTime = 0;
+            
+            transcriptData.words.forEach((word, index) => {
+                const speaker = word.speaker_id || word.speaker || 'Speaker 1';
+                
+                // Start new paragraph for new speaker or every ~50 words
+                if (speaker !== currentSpeaker || currentWords.length >= 50) {
+                    if (currentParagraph && currentWords.length > 0) {
+                        // Finish current paragraph
+                        const wordsSpan = currentParagraph.querySelector('.words');
+                        wordsSpan.textContent = currentWords.join(' ');
+                    }
+                    
+                    // Start new paragraph
+                    currentSpeaker = speaker;
+                    currentWords = [];
+                    const paragraphStartTime = word.start || 0; // Capture value, not reference
+                    startTime = paragraphStartTime; // Still update for any other uses
+                    currentParagraph = document.createElement('div');
+                    currentParagraph.className = 'transcript-card cursor-pointer hover:bg-blue-50 hover:border-blue-300 transition-all duration-200 p-4 bg-gray-50 rounded-lg border-l-4 border-blue-200 mb-3';
+                    currentParagraph.onclick = () => seekToTime(paragraphStartTime);
+                    currentParagraph.innerHTML = `
+                        <div class="flex items-start gap-3 mb-2">
+                            <span class="text-xs text-blue-600 font-mono min-w-[4rem] font-medium">
+                                [${formatTime(paragraphStartTime)}]
+                            </span>
+                            <span class="text-xs font-medium text-gray-700">${speaker}:</span>
+                        </div>
+                        <div class="ml-16">
+                            <span class="words text-sm text-gray-800 leading-relaxed"></span>
+                        </div>
+                    `;
+                    container.appendChild(currentParagraph);
+                }
+                
+                currentWords.push(word.text || word.word || '');
+                
+                // Update timestamp for last word in paragraph
+                if (index === transcriptData.words.length - 1 && currentParagraph) {
+                    const wordsSpan = currentParagraph.querySelector('.words');
+                    wordsSpan.textContent = currentWords.join(' ');
+                }
+            });
+        } else if (transcriptData.text) {
+            // Fallback to plain text if word-level data not available
+            const textDiv = document.createElement('div');
+            textDiv.className = 'text-sm text-gray-800 p-4 bg-gray-50 rounded-lg border-l-4 border-blue-200 leading-relaxed';
+            textDiv.textContent = transcriptData.text;
+            container.appendChild(textDiv);
+        } else {
+            container.innerHTML = '<p class="text-gray-500 text-center py-8">Transcript format not recognized</p>';
+        }
+    });
+}
+
+// Copy transcript to clipboard
+function copyTranscript() {
+    let textToCopy = '';
+    
+    if (transcriptData.words && Array.isArray(transcriptData.words)) {
+        // Create formatted transcript text
+        let currentSpeaker = null;
+        let lines = [];
+        let currentLine = '';
+        
+        transcriptData.words.forEach(word => {
+            const speaker = word.speaker_id || word.speaker || 'Speaker 1';
+            
+            if (speaker !== currentSpeaker) {
+                if (currentLine.trim()) {
+                    lines.push(currentLine.trim());
+                }
+                currentSpeaker = speaker;
+                currentLine = `[${formatTime(word.start || 0)}] ${speaker}: `;
+            }
+            
+            currentLine += (word.text || word.word || '') + ' ';
+        });
+        
+        if (currentLine.trim()) {
+            lines.push(currentLine.trim());
+        }
+        
+        textToCopy = lines.join('\n\n');
+    } else if (transcriptData.text) {
+        textToCopy = transcriptData.text;
+    }
+    
+    navigator.clipboard.writeText(textToCopy).then(() => {
+        // Show success feedback
+        const button = event.target;
+        const originalText = button.textContent;
+        button.textContent = 'Copied!';
+        button.classList.add('text-green-600');
+        
+        setTimeout(() => {
+            button.textContent = originalText;
+            button.classList.remove('text-green-600');
+        }, 2000);
+    }).catch(err => {
+        console.error('Failed to copy: ', err);
+        alert('Failed to copy transcript to clipboard');
+    });
+}
+
+// Search in transcript (desktop only)
+const searchInput = document.getElementById('transcriptSearch');
+if (searchInput) {
+    searchInput.addEventListener('input', function(e) {
+        const searchTerm = e.target.value.toLowerCase();
+        const transcriptCards = document.querySelectorAll('.transcript-card');
+        
+        transcriptCards.forEach(card => {
+            const text = card.textContent.toLowerCase();
+            if (searchTerm === '' || text.includes(searchTerm)) {
+                card.style.display = 'block';
+                
+                // Highlight search terms
+                if (searchTerm !== '') {
+                    const wordsSpan = card.querySelector('.words');
+                    if (wordsSpan) {
+                        let content = wordsSpan.textContent;
+                        const regex = new RegExp(`(${searchTerm})`, 'gi');
+                        const highlightedContent = content.replace(regex, '<mark class="bg-yellow-200">$1</mark>');
+                        wordsSpan.innerHTML = highlightedContent;
+                    }
+                } else {
+                    // Remove highlights
+                    const wordsSpan = card.querySelector('.words');
+                    if (wordsSpan) {
+                        wordsSpan.textContent = wordsSpan.textContent; // This removes HTML tags
+                    }
+                }
+            } else {
+                card.style.display = 'none';
+            }
+        });
+    });
+}
+
+// Format transcript on page load
+document.addEventListener('DOMContentLoaded', function() {
+    if (transcriptData && Object.keys(transcriptData).length > 0) {
+        displayTranscript(transcriptData);
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+
+{% block title %}Overview - YouTube Knowledgebank{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto">
+    <!-- Header with Search -->
+    <div class="mb-8">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-2xl font-bold text-gray-900">Video Library</h2>
+            <a href="/process" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                + Process New Video
+            </a>
+        </div>
+        
+        <!-- Search Bar -->
+        <div class="mb-4">
+            <input 
+                type="text" 
+                id="searchInput"
+                placeholder="Search videos..." 
+                class="w-full max-w-md px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+        </div>
+    </div>
+
+    <!-- Video Grid -->
+    {% if videos %}
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="videoGrid">
+        {% for video in videos %}
+        <a href="/video/{{ video.task_id }}" 
+           class="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow video-card">
+            
+            <!-- Video Title -->
+            <h3 class="font-semibold text-lg text-gray-900 mb-3 line-clamp-2">
+                {{ video.title }}
+            </h3>
+            
+            <!-- Stats -->
+            <div class="flex gap-4 mb-3 text-sm text-gray-600">
+                <span class="flex items-center gap-1">
+                    ⏱ {{ video.duration_formatted }}
+                </span>
+                <span class="flex items-center gap-1">
+                    📝 {{ video.word_count|default(0) }} words
+                </span>
+                {% if video.speaker_count > 0 %}
+                <span class="flex items-center gap-1">
+                    👥 {{ video.speaker_count }} speakers
+                </span>
+                {% endif %}
+            </div>
+            
+            <!-- Uploader -->
+            <div class="text-sm text-gray-600 mb-3">
+                <span class="text-gray-500">Channel:</span> {{ video.uploader|default('Unknown') }}
+            </div>
+            
+            <!-- Processed Date -->
+            <div class="text-xs text-gray-500 border-t border-gray-100 pt-3">
+                Processed: {{ video.processed_date_formatted|default('Unknown') }}
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+    {% else %}
+    <!-- Empty State -->
+    <div class="text-center py-16">
+        <div class="mb-4">
+            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
+        </div>
+        <h3 class="text-lg font-medium text-gray-900 mb-2">No videos processed yet</h3>
+        <p class="text-gray-500 mb-6">Start building your knowledge base by processing your first YouTube video.</p>
+        <a href="/process" 
+           class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors inline-flex items-center gap-2">
+            <span>Process Your First Video</span>
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
+            </svg>
+        </a>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Search functionality -->
+<script>
+document.getElementById('searchInput').addEventListener('input', function(e) {
+    const searchTerm = e.target.value.toLowerCase();
+    const videoCards = document.querySelectorAll('.video-card');
+    
+    videoCards.forEach(card => {
+        const title = card.querySelector('h3').textContent.toLowerCase();
+        const uploader = card.querySelector('.text-gray-600:nth-child(2)').textContent.toLowerCase();
+        
+        if (title.includes(searchTerm) || uploader.includes(searchTerm)) {
+            card.style.display = 'block';
+        } else {
+            card.style.display = 'none';
+        }
+    });
+});
+</script>
+
+<style>
+.line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+</style>
+{% endblock %}
