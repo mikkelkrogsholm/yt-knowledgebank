@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Knowledge Bank - Frontend Test Runner</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#eff6ff', 100: '#dbeafe', 200: '#bfdbfe', 300: '#93c5fd',
+                            400: '#60a5fa', 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8',
+                            800: '#1e40af', 900: '#1e3a8a', 950: '#172554'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="../css/components.css">
+    <link rel="stylesheet" href="../css/icons.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body class="bg-gray-50 min-h-screen" x-data="testRunner()">
+    <div class="max-w-6xl mx-auto px-4 py-8">
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-900 mb-2">Knowledge Bank Frontend Tests</h1>
+            <p class="text-gray-600">Comprehensive testing suite for UI components and API client</p>
+        </div>
+        
+        <!-- Test Controls -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-xl font-semibold text-gray-900">Test Controls</h2>
+                <div class="flex items-center space-x-3">
+                    <button @click="runAllTests()" 
+                            :disabled="isRunning"
+                            class="btn btn-primary"
+                            :class="{ 'opacity-50 cursor-not-allowed': isRunning }">
+                        <span x-show="!isRunning">Run All Tests</span>
+                        <span x-show="isRunning">Running...</span>
+                    </button>
+                    <button @click="clearResults()" 
+                            class="btn btn-secondary">
+                        Clear Results
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Test Categories -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="space-y-2">
+                    <h3 class="font-medium text-gray-900">API Client Tests</h3>
+                    <button @click="runTestSuite('api')" 
+                            :disabled="isRunning"
+                            class="btn btn-sm btn-secondary w-full">
+                        KnowledgeAPI Tests
+                    </button>
+                </div>
+                <div class="space-y-2">
+                    <h3 class="font-medium text-gray-900">Component Tests</h3>
+                    <button @click="runTestSuite('components')" 
+                            :disabled="isRunning"
+                            class="btn btn-sm btn-secondary w-full">
+                        Alpine.js Components
+                    </button>
+                </div>
+                <div class="space-y-2">
+                    <h3 class="font-medium text-gray-900">Integration Tests</h3>
+                    <button @click="runTestSuite('integration')" 
+                            :disabled="isRunning"
+                            class="btn btn-sm btn-secondary w-full">
+                        End-to-End Tests
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Test Results Summary -->
+        <div x-show="results.length > 0" class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+            <h2 class="text-xl font-semibold text-gray-900 mb-4">Test Results Summary</h2>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="text-center p-4 bg-gray-50 rounded-lg">
+                    <div class="text-2xl font-bold text-gray-900" x-text="getTotalTests()"></div>
+                    <div class="text-sm text-gray-600">Total Tests</div>
+                </div>
+                <div class="text-center p-4 bg-green-50 rounded-lg">
+                    <div class="text-2xl font-bold text-green-600" x-text="getPassedTests()"></div>
+                    <div class="text-sm text-green-600">Passed</div>
+                </div>
+                <div class="text-center p-4 bg-red-50 rounded-lg">
+                    <div class="text-2xl font-bold text-red-600" x-text="getFailedTests()"></div>
+                    <div class="text-sm text-red-600">Failed</div>
+                </div>
+                <div class="text-center p-4 bg-blue-50 rounded-lg">
+                    <div class="text-2xl font-bold text-blue-600" x-text="getPassRate()"></div>
+                    <div class="text-sm text-blue-600">Pass Rate</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Detailed Test Results -->
+        <div x-show="results.length > 0" class="space-y-4">
+            <template x-for="result in results" :key="result.suite">
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                    <div class="p-4 border-b border-gray-200 cursor-pointer" 
+                         @click="result.expanded = !result.expanded">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-3">
+                                <span class="text-lg" 
+                                      :class="result.passed ? 'text-green-600' : 'text-red-600'"
+                                      x-text="result.passed ? '✅' : '❌'"></span>
+                                <h3 class="font-semibold text-gray-900" x-text="result.suite"></h3>
+                                <span class="text-sm text-gray-500" 
+                                      x-text="`${result.passedCount}/${result.totalCount} passed`"></span>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <span class="text-sm text-gray-500" 
+                                      x-text="`${result.duration}ms`"></span>
+                                <span class="text-gray-400" 
+                                      :class="{ 'rotate-90': result.expanded }"
+                                      x-text="'▶'"></span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div x-show="result.expanded" 
+                         x-transition:enter="slide-in"
+                         class="p-4 space-y-3">
+                        <template x-for="test in result.tests" :key="test.name">
+                            <div class="flex items-start space-x-3 p-3 rounded border"
+                                 :class="test.passed ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'">
+                                <span class="text-sm" 
+                                      :class="test.passed ? 'text-green-600' : 'text-red-600'"
+                                      x-text="test.passed ? '✅' : '❌'"></span>
+                                <div class="flex-1">
+                                    <div class="font-medium text-sm" 
+                                         :class="test.passed ? 'text-green-900' : 'text-red-900'"
+                                         x-text="test.name"></div>
+                                    <div x-show="test.error" 
+                                         class="text-sm text-red-700 mt-1 font-mono"
+                                         x-text="test.error"></div>
+                                    <div class="text-xs text-gray-500 mt-1" 
+                                         x-text="`${test.duration}ms`"></div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </template>
+        </div>
+        
+        <!-- Test Output Console -->
+        <div class="bg-gray-900 text-green-400 rounded-lg p-4 mt-6 h-64 overflow-y-auto font-mono text-sm" 
+             x-ref="console">
+            <div x-text="'> Knowledge Bank Frontend Test Runner'"></div>
+            <div x-text="'> Ready to run tests...'"></div>
+            <template x-for="log in consoleLogs" :key="log.id">
+                <div x-text="log.message" :class="log.type === 'error' ? 'text-red-400' : ''"></div>
+            </template>
+        </div>
+    </div>
+    
+    <!-- Include test files -->
+    <script src="../js/event-system.js"></script>
+    <script src="../js/knowledge-api.js"></script>
+    <script src="../js/components/search-bar.js"></script>
+    <script src="../js/components/result-card.js"></script>
+    <script src="../js/components/modal.js"></script>
+    <script src="../js/components/loading-spinner.js"></script>
+    <script src="../js/components/error-boundary.js"></script>
+    <script src="../js/dark-mode.js"></script>
+    
+    <!-- Test suites -->
+    <script src="knowledge-api.test.js"></script>
+    <script src="components.test.js"></script>
+    <script src="integration.test.js"></script>
+    
+    <script>
+        function testRunner() {
+            return {
+                isRunning: false,
+                results: [],
+                consoleLogs: [],
+                logId: 1,
+                
+                init() {
+                    this.log('Test runner initialized');
+                    this.log('Available test suites: API Client, Components, Integration');
+                },
+                
+                log(message, type = 'info') {
+                    this.consoleLogs.push({
+                        id: this.logId++,
+                        message: `> ${message}`,
+                        type
+                    });
+                    
+                    this.$nextTick(() => {
+                        this.$refs.console.scrollTop = this.$refs.console.scrollHeight;
+                    });
+                },
+                
+                async runAllTests() {
+                    this.isRunning = true;
+                    this.clearResults();
+                    
+                    this.log('Starting comprehensive test suite...');
+                    
+                    try {
+                        await this.runTestSuite('api');
+                        await this.runTestSuite('components');
+                        await this.runTestSuite('integration');
+                        
+                        this.log('All test suites completed');
+                        this.logSummary();
+                    } catch (error) {
+                        this.log(`Test execution failed: ${error.message}`, 'error');
+                    } finally {
+                        this.isRunning = false;
+                    }
+                },
+                
+                async runTestSuite(suiteType) {
+                    this.log(`Running ${suiteType} tests...`);
+                    
+                    try {
+                        let result;
+                        switch (suiteType) {
+                            case 'api':
+                                result = await this.runAPITests();
+                                break;
+                            case 'components':
+                                result = await this.runComponentTests();
+                                break;
+                            case 'integration':
+                                result = await this.runIntegrationTests();
+                                break;
+                            default:
+                                throw new Error(`Unknown test suite: ${suiteType}`);
+                        }
+                        
+                        this.results.push(result);
+                        this.log(`${suiteType} tests completed: ${result.passedCount}/${result.totalCount} passed`);
+                    } catch (error) {
+                        this.log(`${suiteType} tests failed: ${error.message}`, 'error');
+                    }
+                },
+                
+                async runAPITests() {
+                    const startTime = Date.now();
+                    const tests = [];
+                    
+                    // Run KnowledgeAPI tests if available
+                    if (typeof test !== 'undefined' && test.run) {
+                        try {
+                            const success = await test.run();
+                            
+                            // Convert test framework results to our format
+                            for (const { name, testFn } of test.tests) {
+                                const testStart = Date.now();
+                                try {
+                                    await testFn();
+                                    tests.push({
+                                        name,
+                                        passed: true,
+                                        duration: Date.now() - testStart
+                                    });
+                                } catch (error) {
+                                    tests.push({
+                                        name,
+                                        passed: false,
+                                        error: error.message,
+                                        duration: Date.now() - testStart
+                                    });
+                                }
+                            }
+                        } catch (error) {
+                            tests.push({
+                                name: 'KnowledgeAPI test suite',
+                                passed: false,
+                                error: error.message,
+                                duration: 0
+                            });
+                        }
+                    } else {
+                        tests.push({
+                            name: 'KnowledgeAPI availability',
+                            passed: false,
+                            error: 'Test framework not available',
+                            duration: 0
+                        });
+                    }
+                    
+                    const passedCount = tests.filter(t => t.passed).length;
+                    
+                    return {
+                        suite: 'API Client Tests',
+                        tests,
+                        totalCount: tests.length,
+                        passedCount,
+                        passed: passedCount === tests.length,
+                        duration: Date.now() - startTime,
+                        expanded: false
+                    };
+                },
+                
+                async runComponentTests() {
+                    const startTime = Date.now();
+                    const tests = [];
+                    
+                    // Test Alpine.js component availability
+                    const componentTests = [
+                        { name: 'searchBar component', fn: () => typeof searchBar === 'function' },
+                        { name: 'resultCard component', fn: () => typeof resultCard === 'function' },
+                        { name: 'modal component', fn: () => typeof modal === 'function' },
+                        { name: 'loadingSpinner component', fn: () => typeof loadingSpinner === 'function' },
+                        { name: 'errorBoundary component', fn: () => typeof errorBoundary === 'function' },
+                        { name: 'darkModeToggle component', fn: () => typeof darkModeToggle === 'function' },
+                        { name: 'EventSystem class', fn: () => typeof EventSystem === 'function' },
+                        { name: 'Global eventSystem instance', fn: () => typeof eventSystem === 'object' }
+                    ];
+                    
+                    for (const { name, fn } of componentTests) {
+                        const testStart = Date.now();
+                        try {
+                            const result = fn();
+                            tests.push({
+                                name,
+                                passed: result,
+                                error: result ? null : 'Component not available',
+                                duration: Date.now() - testStart
+                            });
+                        } catch (error) {
+                            tests.push({
+                                name,
+                                passed: false,
+                                error: error.message,
+                                duration: Date.now() - testStart
+                            });
+                        }
+                    }
+                    
+                    const passedCount = tests.filter(t => t.passed).length;
+                    
+                    return {
+                        suite: 'Component Tests',
+                        tests,
+                        totalCount: tests.length,
+                        passedCount,
+                        passed: passedCount === tests.length,
+                        duration: Date.now() - startTime,
+                        expanded: false
+                    };
+                },
+                
+                async runIntegrationTests() {
+                    const startTime = Date.now();
+                    const tests = [];
+                    
+                    // Test Alpine.js integration
+                    const integrationTests = [
+                        {
+                            name: 'Alpine.js is loaded',
+                            fn: () => typeof Alpine !== 'undefined'
+                        },
+                        {
+                            name: 'Dark mode manager initialized',
+                            fn: () => typeof globalDarkMode !== 'undefined' && globalDarkMode instanceof DarkModeManager
+                        },
+                        {
+                            name: 'CSS files loaded',
+                            fn: () => {
+                                const links = document.querySelectorAll('link[rel="stylesheet"]');
+                                return Array.from(links).some(link => link.href.includes('components.css'));
+                            }
+                        },
+                        {
+                            name: 'Event system functional',
+                            fn: () => {
+                                let eventReceived = false;
+                                const unsubscribe = eventSystem.on('test-event', () => {
+                                    eventReceived = true;
+                                });
+                                eventSystem.emit('test-event');
+                                unsubscribe();
+                                return eventReceived;
+                            }
+                        }
+                    ];
+                    
+                    for (const { name, fn } of integrationTests) {
+                        const testStart = Date.now();
+                        try {
+                            const result = fn();
+                            tests.push({
+                                name,
+                                passed: result,
+                                error: result ? null : 'Integration test failed',
+                                duration: Date.now() - testStart
+                            });
+                        } catch (error) {
+                            tests.push({
+                                name,
+                                passed: false,
+                                error: error.message,
+                                duration: Date.now() - testStart
+                            });
+                        }
+                    }
+                    
+                    const passedCount = tests.filter(t => t.passed).length;
+                    
+                    return {
+                        suite: 'Integration Tests',
+                        tests,
+                        totalCount: tests.length,
+                        passedCount,
+                        passed: passedCount === tests.length,
+                        duration: Date.now() - startTime,
+                        expanded: false
+                    };
+                },
+                
+                clearResults() {
+                    this.results = [];
+                    this.consoleLogs = [];
+                    this.logId = 1;
+                    this.log('Results cleared');
+                },
+                
+                getTotalTests() {
+                    return this.results.reduce((sum, result) => sum + result.totalCount, 0);
+                },
+                
+                getPassedTests() {
+                    return this.results.reduce((sum, result) => sum + result.passedCount, 0);
+                },
+                
+                getFailedTests() {
+                    return this.getTotalTests() - this.getPassedTests();
+                },
+                
+                getPassRate() {
+                    const total = this.getTotalTests();
+                    if (total === 0) return '0%';
+                    return Math.round((this.getPassedTests() / total) * 100) + '%';
+                },
+                
+                logSummary() {
+                    const total = this.getTotalTests();
+                    const passed = this.getPassedTests();
+                    const failed = this.getFailedTests();
+                    
+                    this.log('='.repeat(50));
+                    this.log('TEST SUMMARY');
+                    this.log('='.repeat(50));
+                    this.log(`Total Tests: ${total}`);
+                    this.log(`Passed: ${passed}`);
+                    this.log(`Failed: ${failed}`);
+                    this.log(`Pass Rate: ${this.getPassRate()}`);
+                    this.log('='.repeat(50));
+                    
+                    if (failed === 0) {
+                        this.log('🎉 All tests passed!');
+                    } else {
+                        this.log(`⚠️  ${failed} test(s) failed. Check details above.`);
+                    }
+                }
+            };
+        }
+    </script>
+</body>
+</html>

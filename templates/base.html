@@ -1,31 +1,398 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="h-full">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="YouTube Knowledgebank - Extract, search, and discover knowledge from YouTube videos using AI">
+    <meta name="theme-color" content="#ffffff">
     <title>{% block title %}YouTube Knowledgebank{% endblock %}</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
+    
+    <!-- Tailwind CSS with custom configuration -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#eff6ff', 100: '#dbeafe', 200: '#bfdbfe', 300: '#93c5fd',
+                            400: '#60a5fa', 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8',
+                            800: '#1e40af', 900: '#1e3a8a', 950: '#172554'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/static/css/components.css">
+    <link rel="stylesheet" href="/static/css/icons.css">
+    
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    
+    <!-- Initialize dark mode before Alpine.js -->
+    <script src="/static/js/dark-mode.js"></script>
+    
+    {% block head %}{% endblock %}
 </head>
-<body class="bg-gray-50 min-h-screen">
-    <nav class="bg-white shadow-sm border-b border-gray-200">
+<body class="h-full bg-gray-50 dark:bg-gray-900 transition-colors duration-300" 
+      x-data="globalErrorBoundary()" 
+      @keydown.window="handleKeydown">
+    
+    <!-- Global Error Boundary -->
+    <div x-show="hasError" 
+         x-transition:enter="fade-in" 
+         x-transition:leave="fade-out"
+         class="fixed top-4 right-4 max-w-md z-50">
+        <div class="error-container">
+            <div class="flex items-start space-x-3">
+                <span class="error-icon text-xl" x-text="getErrorIcon()"></span>
+                <div class="flex-1">
+                    <h3 class="error-title text-sm" x-text="getErrorTitle()"></h3>
+                    <p class="error-message text-xs mt-1" x-text="getUserFriendlyMessage()"></p>
+                    <div class="error-actions">
+                        <button x-show="canRetry()" 
+                                @click="retry()" 
+                                :disabled="isRetrying"
+                                class="btn btn-sm btn-error">
+                            <span x-show="!isRetrying">Retry</span>
+                            <span x-show="isRetrying">Retrying...</span>
+                        </button>
+                        <button @click="clearError()" 
+                                class="btn btn-sm btn-ghost">
+                            Dismiss
+                        </button>
+                        <button @click="toggleDetails()" 
+                                class="btn btn-sm btn-ghost">
+                            <span x-show="!showDetails">Details</span>
+                            <span x-show="showDetails">Hide</span>
+                        </button>
+                    </div>
+                    <div x-show="showDetails" 
+                         x-transition:enter="slide-in"
+                         class="error-details mt-3">
+                        <div class="error-stack" x-text="error?.stack || error?.message"></div>
+                        <button @click="reportError()" 
+                                class="btn btn-sm btn-ghost mt-2">
+                            Copy Error Report
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Notification Container -->
+    <div id="notification-container" 
+         class="fixed top-4 right-4 space-y-2 z-40"
+         x-data="notificationContainer()">
+    </div>
+    
+    <!-- Navigation -->
+    <nav class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 transition-colors duration-300">
         <div class="max-w-6xl mx-auto px-4 py-3">
             <div class="flex justify-between items-center">
-                <h1 class="text-xl font-semibold text-gray-800">YouTube Knowledgebank</h1>
-                <div class="flex gap-6">
-                    <a href="/" class="text-gray-700 hover:text-gray-900 transition-colors {% if request.url.path == '/' %}font-medium text-blue-600{% endif %}">Overview</a>
-                    <a href="/process" class="text-gray-700 hover:text-gray-900 transition-colors {% if request.url.path == '/process' %}font-medium text-blue-600{% endif %}">Process</a>
-                    <a href="/settings" class="text-gray-700 hover:text-gray-900 transition-colors {% if request.url.path == '/settings' %}font-medium text-blue-600{% endif %}">Settings</a>
+                <!-- Logo and Title -->
+                <div class="flex items-center space-x-3">
+                    <span class="text-2xl">🧠</span>
+                    <h1 class="text-xl font-semibold text-gray-800 dark:text-gray-200">
+                        YouTube Knowledgebank
+                    </h1>
+                </div>
+                
+                <!-- Navigation Links -->
+                <div class="hidden md:flex items-center space-x-6">
+                    <a href="/" 
+                       class="nav-link {% if request.url.path == '/' %}nav-link-active{% endif %}">
+                        <span class="icon-text">
+                            <span class="icon">🏠</span>
+                            <span>Overview</span>
+                        </span>
+                    </a>
+                    <a href="/process" 
+                       class="nav-link {% if request.url.path == '/process' %}nav-link-active{% endif %}">
+                        <span class="icon-text">
+                            <span class="icon">⚙️</span>
+                            <span>Process</span>
+                        </span>
+                    </a>
+                    <a href="/settings" 
+                       class="nav-link {% if request.url.path == '/settings' %}nav-link-active{% endif %}">
+                        <span class="icon-text">
+                            <span class="icon">⚙️</span>
+                            <span>Settings</span>
+                        </span>
+                    </a>
+                    
+                    <!-- Dark Mode Toggle -->
+                    <div x-data="darkModeToggle()" class="flex items-center space-x-2">
+                        <button @click="toggle()" 
+                                class="icon-button"
+                                :title="getToggleText() + getSystemIndicator()">
+                            <span x-text="getToggleIcon()" class="text-lg"></span>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Mobile Menu Button -->
+                <div class="md:hidden flex items-center space-x-2">
+                    <!-- Dark Mode Toggle (Mobile) -->
+                    <div x-data="darkModeToggle()">
+                        <button @click="toggle()" 
+                                class="icon-button"
+                                :title="getToggleText()">
+                            <span x-text="getToggleIcon()" class="text-lg"></span>
+                        </button>
+                    </div>
+                    
+                    <!-- Mobile Menu Toggle -->
+                    <button x-data="{ open: false }" 
+                            @click="open = !open"
+                            class="icon-button">
+                        <span x-show="!open">☰</span>
+                        <span x-show="open">✕</span>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Mobile Navigation Menu -->
+            <div x-data="{ open: false }" 
+                 x-show="open" 
+                 x-transition:enter="slide-in"
+                 x-transition:leave="slide-out"
+                 class="md:hidden mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <div class="space-y-2">
+                    <a href="/" 
+                       class="mobile-nav-link {% if request.url.path == '/' %}mobile-nav-link-active{% endif %}">
+                        Overview
+                    </a>
+                    <a href="/process" 
+                       class="mobile-nav-link {% if request.url.path == '/process' %}mobile-nav-link-active{% endif %}">
+                        Process
+                    </a>
+                    <a href="/settings" 
+                       class="mobile-nav-link {% if request.url.path == '/settings' %}mobile-nav-link-active{% endif %}">
+                        Settings
+                    </a>
                 </div>
             </div>
         </div>
     </nav>
-
-    <main class="max-w-6xl mx-auto px-4 py-8">
+    
+    <!-- Global Search (Press '/' to focus) -->
+    <div x-data="globalSearch()" 
+         x-show="isVisible"
+         x-transition:enter="fade-in"
+         x-transition:leave="fade-out"
+         class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-start justify-center pt-20">
+        <div class="w-full max-w-2xl mx-4">
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700">
+                <div class="p-4">
+                    <div x-data="searchBar()" class="search-bar">
+                        <div class="relative">
+                            <input x-ref="input"
+                                   x-model="query"
+                                   @input="handleInput"
+                                   @keydown="handleKeydown"
+                                   @focus="handleFocus"
+                                   @blur="handleBlur"
+                                   data-search-input
+                                   type="text"
+                                   :placeholder="getPlaceholderText()"
+                                   class="search-input">
+                            <div class="search-icon">
+                                <span x-show="!loading">🔍</span>
+                                <span x-show="loading" class="icon-spin">⏳</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Search Suggestions -->
+                        <div x-show="isOpen" 
+                             x-transition:enter="slide-in"
+                             class="search-suggestions">
+                            <template x-for="(suggestion, index) in suggestions" :key="suggestion.id">
+                                <button @click="selectSuggestion(suggestion)"
+                                        class="search-suggestion"
+                                        :class="{ 'selected': selectedIndex === index }">
+                                    <div class="search-suggestion-text" 
+                                         x-html="formatSuggestionText(suggestion.text)"></div>
+                                    <div class="search-suggestion-meta">
+                                        <span x-text="formatTime(suggestion.start_ms)"></span>
+                                        <span class="mx-2">•</span>
+                                        <span x-text="Math.round(suggestion.rank * 100) + '% match'"></span>
+                                    </div>
+                                </button>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+                <div class="px-4 pb-4 text-xs text-gray-500 dark:text-gray-400 flex items-center justify-between">
+                    <span>Press <kbd class="px-1 bg-gray-100 dark:bg-gray-700 rounded">Enter</kbd> to search</span>
+                    <span>Press <kbd class="px-1 bg-gray-100 dark:bg-gray-700 rounded">Esc</kbd> to close</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Main Content -->
+    <main class="flex-1 max-w-6xl mx-auto px-4 py-8">
         {% block content %}{% endblock %}
     </main>
-
-    <footer class="mt-auto py-6 text-center text-gray-500 text-sm">
+    
+    <!-- Global Modal -->
+    <div x-data="modal()" 
+         x-show="isOpen"
+         x-transition:enter="modal-enter"
+         x-transition:enter-active="modal-enter-active"
+         x-transition:leave="modal-exit"
+         x-transition:leave-active="modal-exit-active"
+         @keydown.window="handleKeydown"
+         class="modal-container">
+        <div class="modal-backdrop" @click="handleBackdropClick"></div>
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="modal-content"
+                 :class="getSizeClasses()"
+                 x-transition:enter="modal-content-enter"
+                 x-transition:enter-active="modal-content-enter-active"
+                 x-transition:leave="modal-content-exit"
+                 x-transition:leave-active="modal-content-exit-active">
+                
+                <!-- Modal Header -->
+                <div class="modal-header">
+                    <h2 class="modal-title" x-text="getTitle()"></h2>
+                    <button x-show="closable" 
+                            @click="hide()" 
+                            class="modal-close icon-button">
+                        <span>✕</span>
+                    </button>
+                </div>
+                
+                <!-- Modal Body -->
+                <div class="modal-body" x-html="getContent()"></div>
+                
+                <!-- Modal Footer (for certain types) -->
+                <div x-show="type === 'confirm' || type === 'form'" 
+                     class="modal-footer">
+                    <!-- Footer content is handled in getContent() for flexibility -->
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Footer -->
+    <footer class="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 py-6 text-center text-gray-500 dark:text-gray-400 text-sm transition-colors duration-300">
         <p>YouTube Knowledgebank - Extract and organize knowledge from YouTube videos</p>
+        <div class="mt-2 flex items-center justify-center space-x-4 text-xs">
+            <span>Press <kbd class="px-1 bg-gray-100 dark:bg-gray-700 rounded">/</kbd> to search</span>
+            <span>Press <kbd class="px-1 bg-gray-100 dark:bg-gray-700 rounded">Ctrl+K</kbd> for quick actions</span>
+            <span>Press <kbd class="px-1 bg-gray-100 dark:bg-gray-700 rounded">Ctrl+/</kbd> for help</span>
+        </div>
     </footer>
+    
+    <!-- Core JavaScript -->
+    <script src="/static/js/event-system.js"></script>
+    <script src="/static/js/knowledge-api.js"></script>
+    <script src="/static/js/components/search-bar.js"></script>
+    <script src="/static/js/components/result-card.js"></script>
+    <script src="/static/js/components/modal.js"></script>
+    <script src="/static/js/components/loading-spinner.js"></script>
+    <script src="/static/js/components/error-boundary.js"></script>
+    
+    <!-- Initialize global components -->
+    <script>
+        // Global search component
+        function globalSearch() {
+            return {
+                isVisible: false,
+                
+                init() {
+                    eventSystem.on('quickSearch', () => {
+                        this.show();
+                    });
+                    
+                    eventSystem.on('escape', () => {
+                        this.hide();
+                    });
+                },
+                
+                show() {
+                    this.isVisible = true;
+                    this.$nextTick(() => {
+                        const input = document.querySelector('[data-search-input]');
+                        if (input) input.focus();
+                    });
+                },
+                
+                hide() {
+                    this.isVisible = false;
+                }
+            };
+        }
+        
+        // Notification container
+        function notificationContainer() {
+            return {
+                notifications: [],
+                nextId: 1,
+                
+                init() {
+                    eventSystem.on('notification', (data) => {
+                        this.show(data.message, data.type, data.duration);
+                    });
+                },
+                
+                show(message, type = 'info', duration = 5000) {
+                    const notification = {
+                        id: this.nextId++,
+                        message,
+                        type,
+                        visible: true
+                    };
+                    
+                    this.notifications.push(notification);
+                    
+                    if (duration > 0) {
+                        setTimeout(() => {
+                            this.remove(notification.id);
+                        }, duration);
+                    }
+                },
+                
+                remove(id) {
+                    const index = this.notifications.findIndex(n => n.id === id);
+                    if (index >= 0) {
+                        this.notifications[index].visible = false;
+                        setTimeout(() => {
+                            this.notifications.splice(index, 1);
+                        }, 300);
+                    }
+                }
+            };
+        }
+    </script>
+    
+    <!-- Custom CSS for navigation -->
+    <style>
+        .nav-link {
+            @apply text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 transition-colors;
+        }
+        .nav-link-active {
+            @apply font-medium text-primary-600 dark:text-primary-400;
+        }
+        .mobile-nav-link {
+            @apply block px-3 py-2 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 rounded transition-colors;
+        }
+        .mobile-nav-link-active {
+            @apply font-medium text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900;
+        }
+    </style>
+    
+    {% block scripts %}{% endblock %}
 </body>
 </html>

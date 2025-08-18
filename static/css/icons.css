@@ -1,0 +1,555 @@
+/**
+ * Icon System CSS
+ * 
+ * SVG-based icon system for the Knowledge Bank application
+ */
+
+/* Base Icon Styles */
+.icon {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  fill: currentColor;
+  flex-shrink: 0;
+}
+
+.icon-sm {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.icon-md {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.icon-lg {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.icon-xl {
+  width: 2rem;
+  height: 2rem;
+}
+
+/* Icon Definitions */
+.icon-search::before {
+  content: '🔍';
+}
+
+.icon-video::before {
+  content: '🎥';
+}
+
+.icon-entity::before {
+  content: '🏷️';
+}
+
+.icon-topic::before {
+  content: '📝';
+}
+
+.icon-search-result::before {
+  content: '🔎';
+}
+
+.icon-person::before {
+  content: '👤';
+}
+
+.icon-organization::before {
+  content: '🏢';
+}
+
+.icon-book::before {
+  content: '📚';
+}
+
+.icon-concept::before {
+  content: '💡';
+}
+
+.icon-place::before {
+  content: '📍';
+}
+
+.icon-event::before {
+  content: '📅';
+}
+
+.icon-close::before {
+  content: '✕';
+}
+
+.icon-menu::before {
+  content: '☰';
+}
+
+.icon-settings::before {
+  content: '⚙️';
+}
+
+.icon-help::before {
+  content: '❓';
+}
+
+.icon-info::before {
+  content: 'ℹ️';
+}
+
+.icon-warning::before {
+  content: '⚠️';
+}
+
+.icon-error::before {
+  content: '❌';
+}
+
+.icon-success::before {
+  content: '✅';
+}
+
+.icon-loading::before {
+  content: '⏳';
+}
+
+.icon-refresh::before {
+  content: '🔄';
+}
+
+.icon-download::before {
+  content: '⬇️';
+}
+
+.icon-upload::before {
+  content: '⬆️';
+}
+
+.icon-export::before {
+  content: '📤';
+}
+
+.icon-import::before {
+  content: '📥';
+}
+
+.icon-link::before {
+  content: '🔗';
+}
+
+.icon-external::before {
+  content: '🔗';
+}
+
+.icon-copy::before {
+  content: '📋';
+}
+
+.icon-share::before {
+  content: '📤';
+}
+
+.icon-bookmark::before {
+  content: '🔖';
+}
+
+.icon-star::before {
+  content: '⭐';
+}
+
+.icon-heart::before {
+  content: '❤️';
+}
+
+.icon-thumbs-up::before {
+  content: '👍';
+}
+
+.icon-thumbs-down::before {
+  content: '👎';
+}
+
+.icon-play::before {
+  content: '▶️';
+}
+
+.icon-pause::before {
+  content: '⏸️';
+}
+
+.icon-stop::before {
+  content: '⏹️';
+}
+
+.icon-forward::before {
+  content: '⏩';
+}
+
+.icon-backward::before {
+  content: '⏪';
+}
+
+.icon-volume::before {
+  content: '🔊';
+}
+
+.icon-mute::before {
+  content: '🔇';
+}
+
+.icon-fullscreen::before {
+  content: '⛶';
+}
+
+.icon-minimize::before {
+  content: '🗕';
+}
+
+.icon-maximize::before {
+  content: '🗖';
+}
+
+.icon-arrow-up::before {
+  content: '↑';
+}
+
+.icon-arrow-down::before {
+  content: '↓';
+}
+
+.icon-arrow-left::before {
+  content: '←';
+}
+
+.icon-arrow-right::before {
+  content: '→';
+}
+
+.icon-chevron-up::before {
+  content: '⌃';
+}
+
+.icon-chevron-down::before {
+  content: '⌄';
+}
+
+.icon-chevron-left::before {
+  content: '‹';
+}
+
+.icon-chevron-right::before {
+  content: '›';
+}
+
+.icon-plus::before {
+  content: '+';
+}
+
+.icon-minus::before {
+  content: '−';
+}
+
+.icon-edit::before {
+  content: '✏️';
+}
+
+.icon-delete::before {
+  content: '🗑️';
+}
+
+.icon-archive::before {
+  content: '📦';
+}
+
+.icon-folder::before {
+  content: '📁';
+}
+
+.icon-file::before {
+  content: '📄';
+}
+
+.icon-image::before {
+  content: '🖼️';
+}
+
+.icon-calendar::before {
+  content: '📅';
+}
+
+.icon-clock::before {
+  content: '🕐';
+}
+
+.icon-user::before {
+  content: '👤';
+}
+
+.icon-users::before {
+  content: '👥';
+}
+
+.icon-mail::before {
+  content: '✉️';
+}
+
+.icon-phone::before {
+  content: '📞';
+}
+
+.icon-globe::before {
+  content: '🌐';
+}
+
+.icon-lock::before {
+  content: '🔒';
+}
+
+.icon-unlock::before {
+  content: '🔓';
+}
+
+.icon-key::before {
+  content: '🔑';
+}
+
+.icon-shield::before {
+  content: '🛡️';
+}
+
+.icon-eye::before {
+  content: '👁️';
+}
+
+.icon-eye-off::before {
+  content: '🙈';
+}
+
+.icon-filter::before {
+  content: '🔽';
+}
+
+.icon-sort::before {
+  content: '🔽';
+}
+
+.icon-grid::before {
+  content: '▦';
+}
+
+.icon-list::before {
+  content: '☰';
+}
+
+.icon-chart::before {
+  content: '📊';
+}
+
+.icon-graph::before {
+  content: '📈';
+}
+
+.icon-database::before {
+  content: '🗄️';
+}
+
+.icon-server::before {
+  content: '🖥️';
+}
+
+.icon-cloud::before {
+  content: '☁️';
+}
+
+.icon-wifi::before {
+  content: '📶';
+}
+
+.icon-bluetooth::before {
+  content: '🔵';
+}
+
+.icon-battery::before {
+  content: '🔋';
+}
+
+.icon-power::before {
+  content: '🔌';
+}
+
+.icon-light::before {
+  content: '💡';
+}
+
+.icon-dark::before {
+  content: '🌙';
+}
+
+.icon-sun::before {
+  content: '☀️';
+}
+
+.icon-moon::before {
+  content: '🌙';
+}
+
+.icon-contrast::before {
+  content: '🌗';
+}
+
+/* SVG Icon Styles (Alternative to Unicode) */
+.icon-svg {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  stroke-width: 2;
+  stroke: currentColor;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Icon Button Styles */
+.icon-button {
+  @apply inline-flex items-center justify-center p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-colors dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-800;
+}
+
+.icon-button-sm {
+  @apply p-1;
+}
+
+.icon-button-lg {
+  @apply p-3;
+}
+
+.icon-button-primary {
+  @apply text-primary-600 hover:text-primary-700 hover:bg-primary-50 dark:text-primary-400 dark:hover:text-primary-300 dark:hover:bg-primary-900;
+}
+
+.icon-button-success {
+  @apply text-success-600 hover:text-success-700 hover:bg-success-50 dark:text-success-400 dark:hover:text-success-300 dark:hover:bg-success-900;
+}
+
+.icon-button-warning {
+  @apply text-warning-600 hover:text-warning-700 hover:bg-warning-50 dark:text-warning-400 dark:hover:text-warning-300 dark:hover:bg-warning-900;
+}
+
+.icon-button-error {
+  @apply text-error-600 hover:text-error-700 hover:bg-error-50 dark:text-error-400 dark:hover:text-error-300 dark:hover:bg-error-900;
+}
+
+/* Icon with Text Layouts */
+.icon-text {
+  @apply flex items-center space-x-2;
+}
+
+.icon-text-vertical {
+  @apply flex flex-col items-center space-y-1;
+}
+
+.icon-text-reverse {
+  @apply flex items-center space-x-2 flex-row-reverse;
+}
+
+/* Animated Icons */
+.icon-spin {
+  animation: spin 2s linear infinite;
+}
+
+.icon-pulse {
+  animation: pulse 2s infinite;
+}
+
+.icon-bounce {
+  animation: bounce 1s infinite;
+}
+
+.icon-wiggle {
+  animation: wiggle 0.5s ease-in-out;
+}
+
+@keyframes wiggle {
+  0%, 7% { transform: rotateZ(0); }
+  15% { transform: rotateZ(-15deg); }
+  20% { transform: rotateZ(10deg); }
+  25% { transform: rotateZ(-10deg); }
+  30% { transform: rotateZ(6deg); }
+  35% { transform: rotateZ(-4deg); }
+  40%, 100% { transform: rotateZ(0); }
+}
+
+/* Icon States */
+.icon-disabled {
+  @apply opacity-50 cursor-not-allowed;
+}
+
+.icon-loading {
+  @apply opacity-50;
+}
+
+.icon-active {
+  @apply text-primary-600 dark:text-primary-400;
+}
+
+.icon-inactive {
+  @apply text-gray-400 dark:text-gray-600;
+}
+
+/* Context-specific Icon Colors */
+.icon-video-type {
+  @apply text-video-600 dark:text-video-400;
+}
+
+.icon-entity-type {
+  @apply text-entity-600 dark:text-entity-400;
+}
+
+.icon-topic-type {
+  @apply text-topic-600 dark:text-topic-400;
+}
+
+.icon-search-type {
+  @apply text-search-600 dark:text-search-400;
+}
+
+/* Accessibility Improvements */
+.icon[aria-hidden="true"] {
+  speak: none;
+}
+
+.icon:focus {
+  @apply outline-none ring-2 ring-primary-500 ring-offset-2 rounded;
+}
+
+/* High Contrast Mode */
+@media (prefers-contrast: high) {
+  .icon {
+    @apply text-black dark:text-white;
+  }
+  
+  .icon-button {
+    @apply border border-gray-800 dark:border-gray-200;
+  }
+}
+
+/* Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  .icon-spin,
+  .icon-pulse,
+  .icon-bounce,
+  .icon-wiggle {
+    animation: none;
+  }
+}
+
+/* Print Styles */
+@media print {
+  .icon {
+    @apply text-black;
+  }
+  
+  .icon-button {
+    @apply border border-gray-800;
+  }
+}

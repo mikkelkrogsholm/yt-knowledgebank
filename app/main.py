@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request, Form, Query, HTTPException
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, validator
 from app.processor import process_and_transcribe, progress_store, get_task_result, get_all_videos
 from app.settings import get_api_key, save_api_key, get_openai_api_key, save_openai_api_key, get_model_config
@@ -116,6 +117,9 @@ class SessionsResponse(BaseModel):
     total_count: int
 
 app = FastAPI()
+
+# Static files configuration
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 templates = Jinja2Templates(directory="templates")
 
