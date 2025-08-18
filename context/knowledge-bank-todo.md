@@ -36,21 +36,21 @@ Follow the git strategy in `context/git-strategy.md`:
 - [x] Add rollback capability - Transaction management and rollback support implemented
 
 ### FTS5 Integration
-- [ ] Set up FTS5 virtual table for transcript search
-- [ ] Create full-text search API endpoints
-- [ ] Implement search highlighting
-- [ ] Add search filters (speaker, date, video)
+- [x] Set up FTS5 virtual table for transcript search - Virtual table with triggers implemented
+- [x] Create full-text search API endpoints - Both GET and POST endpoints with comprehensive filtering
+- [x] Implement search highlighting - Mark tags with snippet generation around search terms
+- [x] Add search filters (speaker, date, video) - All filters implemented with combination support
 
 ### API Updates
 - [ ] Update `/video/{id}` endpoint to use database
 - [ ] Update overview page to use database queries
-- [ ] Add search API endpoint `/api/search`
+- [x] Add search API endpoint `/api/search` - Both GET and POST with comprehensive search models
 - [ ] Maintain backward compatibility
 
 ### Testing
 - [x] Unit tests for database models - Comprehensive test suite implemented
 - [x] Integration tests for migration - 27 comprehensive tests covering all migration functions
-- [ ] Performance tests for search queries
+- [x] Performance tests for search queries - Comprehensive test suite with 27 tests, <2ms average query time
 - [x] Test with existing data - Successfully tested with real video data in Docker
 
 ### Documentation

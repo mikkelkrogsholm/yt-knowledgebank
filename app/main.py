@@ -1,10 +1,12 @@
-from fastapi import FastAPI, Request, Form
+from fastapi import FastAPI, Request, Form, Query
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse, RedirectResponse
+from pydantic import BaseModel
 from app.processor import process_and_transcribe, progress_store, get_task_result, get_all_videos
 from app.settings import get_api_key, save_api_key
 from app.database import init_database, get_database_session
 from app.migration import MigrationManager
+from app.search import SearchManager, SearchResult
 import os
 import sys
 import argparse
@@ -12,6 +14,36 @@ import uuid
 import json
 import asyncio
 import logging
+from datetime import datetime
+from typing import Optional, List
+
+# Pydantic models for search API
+class SearchRequest(BaseModel):
+    query: str
+    video_id: Optional[str] = None
+    speaker_id: Optional[str] = None
+    start_date: Optional[str] = None  # ISO format string
+    end_date: Optional[str] = None    # ISO format string
+    limit: int = 50
+    offset: int = 0
+
+class SearchResultResponse(BaseModel):
+    id: int
+    video_id: str
+    speaker_id: str
+    start_ms: int
+    end_ms: int
+    text: str
+    highlighted_text: str
+    rank: float
+    word_count: int
+
+class SearchResponse(BaseModel):
+    query: str
+    results: List[SearchResultResponse]
+    total_found: int
+    has_more: bool
+    query_time_ms: float
 
 app = FastAPI()
 
@@ -118,6 +150,129 @@ async def video_detail(request: Request, task_id: str):
             "request": request,
             "message": f"Error loading video: {str(e)}"
         }, status_code=500)
+
+@app.post("/api/search", response_model=SearchResponse)
+async def search_transcripts(search_request: SearchRequest):
+    """
+    Search through transcript chunks using FTS5 full-text search.
+    
+    Returns search results with highlighting, filtering, and pagination.
+    """
+    try:
+        import time
+        
+        # Parse date strings if provided
+        start_date = None
+        end_date = None
+        
+        if search_request.start_date:
+            try:
+                start_date = datetime.fromisoformat(search_request.start_date.replace('Z', '+00:00'))
+            except ValueError:
+                return JSONResponse(
+                    {"error": "Invalid start_date format. Use ISO format (YYYY-MM-DDTHH:MM:SS)"},
+                    status_code=400
+                )
+        
+        if search_request.end_date:
+            try:
+                end_date = datetime.fromisoformat(search_request.end_date.replace('Z', '+00:00'))
+            except ValueError:
+                return JSONResponse(
+                    {"error": "Invalid end_date format. Use ISO format (YYYY-MM-DDTHH:MM:SS)"},
+                    status_code=400
+                )
+        
+        # Perform search
+        search_manager = SearchManager()
+        start_time = time.time()
+        
+        results = search_manager.search(
+            query=search_request.query,
+            video_id=search_request.video_id,
+            speaker_id=search_request.speaker_id,
+            start_date=start_date,
+            end_date=end_date,
+            limit=search_request.limit + 1,  # Get one extra to check if there are more results
+            offset=search_request.offset
+        )
+        
+        end_time = time.time()
+        query_time_ms = (end_time - start_time) * 1000
+        
+        # Check if there are more results
+        has_more = len(results) > search_request.limit
+        if has_more:
+            results = results[:-1]  # Remove the extra result
+        
+        # Convert to response model
+        result_responses = [
+            SearchResultResponse(
+                id=result.id,
+                video_id=result.video_id,
+                speaker_id=result.speaker_id,
+                start_ms=result.start_ms,
+                end_ms=result.end_ms,
+                text=result.text,
+                highlighted_text=result.highlighted_text,
+                rank=result.rank,
+                word_count=result.word_count
+            ) for result in results
+        ]
+        
+        return SearchResponse(
+            query=search_request.query,
+            results=result_responses,
+            total_found=len(result_responses),
+            has_more=has_more,
+            query_time_ms=query_time_ms
+        )
+        
+    except Exception as e:
+        return JSONResponse(
+            {"error": f"Search error: {str(e)}"},
+            status_code=500
+        )
+
+@app.get("/api/search", response_model=SearchResponse)
+async def search_transcripts_get(
+    q: str = Query(..., description="Search query"),
+    video_id: Optional[str] = Query(None, description="Filter by video ID"),
+    speaker_id: Optional[str] = Query(None, description="Filter by speaker ID"),
+    start_date: Optional[str] = Query(None, description="Filter by start date (ISO format)"),
+    end_date: Optional[str] = Query(None, description="Filter by end date (ISO format)"),
+    limit: int = Query(50, ge=1, le=100, description="Number of results to return"),
+    offset: int = Query(0, ge=0, description="Number of results to skip")
+):
+    """
+    Search through transcript chunks using GET request.
+    
+    This is an alternative to the POST endpoint for simple searches.
+    """
+    search_request = SearchRequest(
+        query=q,
+        video_id=video_id,
+        speaker_id=speaker_id,
+        start_date=start_date,
+        end_date=end_date,
+        limit=limit,
+        offset=offset
+    )
+    
+    return await search_transcripts(search_request)
+
+@app.get("/api/search/stats")
+async def search_stats():
+    """Get search index statistics."""
+    try:
+        search_manager = SearchManager()
+        stats = search_manager.get_search_stats()
+        return JSONResponse(stats)
+    except Exception as e:
+        return JSONResponse(
+            {"error": f"Failed to get search stats: {str(e)}"},
+            status_code=500
+        )
 
 @app.get("/api/migration/status")
 async def migration_status():
