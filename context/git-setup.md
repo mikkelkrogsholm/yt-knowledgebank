@@ -6,8 +6,8 @@ Our git repository is now configured with the complete branching strategy for kn
 ## Branch Structure
 
 ### Main Branches
-- **`main`** - Production-ready code, stable releases
-- **`develop`** - Integration branch, latest development state
+- **`main`** - Production-ready code, stable releases (protected, PR-only)
+- **`develop`** - Integration branch, latest development state (default branch)
 
 ### Feature Branches (Knowledge Bank Development)
 - **`feature/database-foundation`** - Phase 1: SQLite migration and FTS5 setup
@@ -57,10 +57,12 @@ git push origin --delete feature/your-completed-feature
 
 ### Creating Releases
 ```bash
-# When develop is stable, merge to main
+# When develop is stable, create PR to main
+gh pr create --base main --head develop --title "Release v1.0.0" --body "Release notes..."
+
+# After PR is approved and merged, tag the release
 git checkout main
 git pull origin main
-git merge develop
 git tag -a v1.0.0 -m "Release version 1.0.0"
 git push origin main --tags
 ```
@@ -71,10 +73,18 @@ git push origin main --tags
 3. **Test thoroughly**: Ensure Docker builds work before commits
 4. **Security check**: Always verify no sensitive data in commits
 
-## GitHub Repository
+## GitHub Repository Configuration
 - **Main repo**: https://github.com/mikkelkrogsholm/yt-knowledgebank
-- **All branches available** for pull requests and collaboration
-- **Branch protection**: Consider adding protection rules for main/develop
+- **Default branch**: `develop` (set in GitHub Settings → General)
+- **Branch protection**: `main` branch protected (requires PRs)
+- **All feature branches** available for pull requests and collaboration
+
+### Required GitHub Settings:
+1. **Settings → General → Default branch**: Change to `develop`
+2. **Settings → Branches**: Add protection rule for `main`
+   - Require pull request reviews
+   - Require status checks
+   - Include administrators
 
 ## Commit Convention Examples
 ```bash
