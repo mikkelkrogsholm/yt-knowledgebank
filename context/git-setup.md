@@ -75,16 +75,25 @@ git push origin main --tags
 
 ## GitHub Repository Configuration
 - **Main repo**: https://github.com/mikkelkrogsholm/yt-knowledgebank
-- **Default branch**: `develop` (set in GitHub Settings → General)
-- **Branch protection**: `main` branch protected (requires PRs)
+- **Default branch**: `develop` ✅ **CONFIGURED**
+- **Branch protection**: `main` branch protected ✅ **CONFIGURED**
 - **All feature branches** available for pull requests and collaboration
 
-### Required GitHub Settings:
-1. **Settings → General → Default branch**: Change to `develop`
-2. **Settings → Branches**: Add protection rule for `main`
-   - Require pull request reviews
-   - Require status checks
-   - Include administrators
+### Applied Protection Settings for `main`:
+✅ **Require pull request reviews**: 1 required approval
+✅ **Dismiss stale reviews**: When new commits are pushed
+✅ **Enforce for administrators**: Even admins need PRs
+✅ **Block force pushes**: Direct pushes blocked
+✅ **Block deletions**: Branch cannot be deleted
+
+### GitHub CLI Commands Used:
+```bash
+# Set default branch to develop
+gh repo edit mikkelkrogsholm/yt-knowledgebank --default-branch develop
+
+# Apply branch protection to main
+gh api repos/mikkelkrogsholm/yt-knowledgebank/branches/main/protection -X PUT
+```
 
 ## Commit Convention Examples
 ```bash
