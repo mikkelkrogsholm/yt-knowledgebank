@@ -49,6 +49,39 @@ app = FastAPI()
 
 templates = Jinja2Templates(directory="templates")
 
+@app.on_event("startup")
+async def startup_event():
+    """Initialize database on application startup."""
+    try:
+        # Initialize database (creates tables if they don't exist)
+        db_manager = init_database()
+        print(f"🗄️  Database initialized successfully")
+        
+        # Auto-run migration if there are unmigrated JSON files
+        try:
+            migration_manager = MigrationManager(
+                videos_directory="/app/data/videos",
+                database_manager=db_manager
+            )
+            status = migration_manager.check_migration_status()
+            
+            if status["json_files_count"] > 0 and status["migrated_count"] == 0:
+                print(f"🔄 Found {status['json_files_count']} unmigrated videos. Running auto-migration...")
+                result = migration_manager.run_migration()
+                if result["status"] == "success":
+                    print(f"✅ Auto-migration completed: {result['migrated']} videos migrated")
+                else:
+                    print(f"⚠️  Auto-migration failed: {result.get('error', 'Unknown error')}")
+            elif status["json_files_count"] > 0 and status["unmigrated_count"] > 0:
+                print(f"📝 Found {status['unmigrated_count']} unmigrated videos out of {status['json_files_count']} total")
+                
+        except Exception as migration_error:
+            print(f"⚠️  Auto-migration check failed: {migration_error}")
+            
+    except Exception as e:
+        print(f"❌ Database initialization failed: {e}")
+        # Continue startup anyway - the app can function with JSON files only
+
 @app.get("/", response_class=HTMLResponse)
 async def overview(request: Request):
     """Main overview page showing all processed videos"""

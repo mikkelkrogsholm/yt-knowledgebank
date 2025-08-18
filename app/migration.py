@@ -396,6 +396,52 @@ class MigrationManager:
         
         return batch_result
     
+    def check_migration_status(self) -> Dict[str, Any]:
+        """
+        Check the current migration status - how many JSON files exist vs how many are in database.
+        
+        Returns:
+            Dictionary with migration status information
+        """
+        try:
+            # Count JSON files
+            video_data_list = discover_video_data(self.videos_directory)
+            json_files_count = len(video_data_list)
+            
+            # Count videos in database
+            with self.database_manager.get_session() as session:
+                from app.database import Video
+                db_videos_count = session.query(Video).count()
+                
+                # Check which videos are already migrated
+                migrated_videos = set()
+                if db_videos_count > 0:
+                    db_video_ids = session.query(Video.id).all()
+                    migrated_videos = {video_id[0] for video_id in db_video_ids}
+                
+                # Count how many JSON files are already migrated
+                json_video_ids = {video_data["task_id"] for video_data in video_data_list}
+                already_migrated = json_video_ids.intersection(migrated_videos)
+                
+                return {
+                    "json_files_count": json_files_count,
+                    "database_count": db_videos_count,
+                    "migrated_count": len(already_migrated),
+                    "unmigrated_count": json_files_count - len(already_migrated),
+                    "ready_for_migration": json_files_count > len(already_migrated)
+                }
+                
+        except Exception as e:
+            logger.error(f"Error checking migration status: {e}")
+            return {
+                "json_files_count": 0,
+                "database_count": 0,
+                "migrated_count": 0,
+                "unmigrated_count": 0,
+                "ready_for_migration": False,
+                "error": str(e)
+            }
+
     def _process_video(self, session, video_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Process a single video and its associated data.
@@ -473,7 +519,7 @@ class MigrationManager:
         return video_result
 
 
-def run_migration_cli(videos_dir: str = "/app/data/videos", database_url: str = "sqlite:///app/data/knowledge_bank.db"):
+def run_migration_cli(videos_dir: str = "/app/data/videos", database_url: str = "sqlite:////app/data/knowledge_bank.db"):
     """
     CLI function to run migration.
     

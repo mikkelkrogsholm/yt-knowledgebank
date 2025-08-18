@@ -13,11 +13,33 @@ try:
         get_all_videos_from_database,
         get_task_result_from_database, 
         save_video_to_database,
-        check_video_exists_in_database
+        check_video_exists_in_database,
+        format_duration,
+        format_date
     )
     DATABASE_AVAILABLE = True
 except ImportError:
     DATABASE_AVAILABLE = False
+    # Define fallback utility functions if database imports fail
+    def format_duration(seconds: int) -> str:
+        """Format duration in seconds to MM:SS format."""
+        if not seconds:
+            return "0:00"
+        
+        mins = seconds // 60
+        secs = seconds % 60
+        return f"{mins}:{secs:02d}"
+
+    def format_date(date_str: str) -> str:
+        """Format ISO date string to readable format."""
+        if not date_str:
+            return "Unknown"
+        
+        try:
+            dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+            return dt.strftime("%b %d, %Y")
+        except (ValueError, AttributeError):
+            return "Unknown"
 
 logger = logging.getLogger(__name__)
 
@@ -340,22 +362,3 @@ def get_all_videos_from_files() -> List[Dict[str, Any]]:
     # Sort by processed date (most recent first)
     return sorted(videos, key=lambda x: x.get('processed_date', ''), reverse=True)
 
-def format_duration(seconds: int) -> str:
-    """Format duration in seconds to MM:SS format."""
-    if not seconds:
-        return "0:00"
-    
-    mins = seconds // 60
-    secs = seconds % 60
-    return f"{mins}:{secs:02d}"
-
-def format_date(date_str: str) -> str:
-    """Format ISO date string to readable format."""
-    if not date_str:
-        return "Unknown"
-    
-    try:
-        dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
-        return dt.strftime("%b %d, %Y")
-    except (ValueError, AttributeError):
-        return "Unknown"

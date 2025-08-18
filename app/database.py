@@ -186,7 +186,7 @@ class DatabaseManager:
 _db_manager: Optional[DatabaseManager] = None
 
 
-def init_database(database_url: str = "sqlite:///data/knowledge_bank.db") -> DatabaseManager:
+def init_database(database_url: str = "sqlite:////app/data/knowledge_bank.db") -> DatabaseManager:
     """
     Initialize the database with tables and return the database manager.
     

@@ -10,7 +10,26 @@ from datetime import datetime
 from sqlalchemy import func, desc
 from sqlalchemy.orm import Session
 from app.database import get_database_session, Video, TranscriptChunk, Speaker
-from app.processor import format_duration, format_date
+# Utility functions (moved here to avoid circular imports)
+def format_duration(seconds: int) -> str:
+    """Format duration in seconds to MM:SS format."""
+    if not seconds:
+        return "0:00"
+    
+    mins = seconds // 60
+    secs = seconds % 60
+    return f"{mins}:{secs:02d}"
+
+def format_date(date_str: str) -> str:
+    """Format ISO date string to readable format."""
+    if not date_str:
+        return "Unknown"
+    
+    try:
+        dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+        return dt.strftime("%b %d, %Y")
+    except (ValueError, AttributeError):
+        return "Unknown"
 
 logger = logging.getLogger(__name__)
 
