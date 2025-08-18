@@ -3,8 +3,45 @@ import os
 import json
 import asyncio
 import re
+import logging
 from typing import Dict, Any, List
 from datetime import datetime
+
+# Database integration imports
+try:
+    from app.database_queries import (
+        get_all_videos_from_database,
+        get_task_result_from_database, 
+        save_video_to_database,
+        check_video_exists_in_database,
+        format_duration,
+        format_date
+    )
+    DATABASE_AVAILABLE = True
+except ImportError:
+    DATABASE_AVAILABLE = False
+    # Define fallback utility functions if database imports fail
+    def format_duration(seconds: int) -> str:
+        """Format duration in seconds to MM:SS format."""
+        if not seconds:
+            return "0:00"
+        
+        mins = seconds // 60
+        secs = seconds % 60
+        return f"{mins}:{secs:02d}"
+
+    def format_date(date_str: str) -> str:
+        """Format ISO date string to readable format."""
+        if not date_str:
+            return "Unknown"
+        
+        try:
+            dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+            return dt.strftime("%b %d, %Y")
+        except (ValueError, AttributeError):
+            return "Unknown"
+
+logger = logging.getLogger(__name__)
 
 # Progress tracking
 progress_store: Dict[str, Dict] = {}
@@ -155,9 +192,20 @@ async def process_and_transcribe(url: str, task_id: str, api_key: str) -> Dict[s
         else:
             transcript_data = transcription
         
-        # Save transcript
+        # Save transcript to JSON file
         with open(f'{task_dir}/transcript.json', 'w') as f:
             json.dump(transcript_data, f, indent=2)
+        
+        # Also save to database if available (dual storage for backward compatibility)
+        if DATABASE_AVAILABLE:
+            try:
+                save_success = save_video_to_database(metadata, transcript_data)
+                if save_success:
+                    logger.info(f"Successfully saved video {task_id} to database")
+                else:
+                    logger.warning(f"Failed to save video {task_id} to database")
+            except Exception as e:
+                logger.error(f"Error saving video {task_id} to database: {str(e)}")
         
         # Mark as completed
         progress_store[task_id] = {
@@ -183,7 +231,28 @@ async def process_and_transcribe(url: str, task_id: str, api_key: str) -> Dict[s
         raise e
 
 def get_task_result(task_id: str) -> Dict[str, Any]:
-    """Get the final result for a completed task."""
+    """
+    Get the final result for a completed task.
+    
+    Uses database if available, falls back to JSON files for backward compatibility.
+    """
+    # Try database first if available
+    if DATABASE_AVAILABLE:
+        try:
+            database_result = get_task_result_from_database(task_id)
+            if database_result:  # If we got results from database
+                logger.info(f"Retrieved task {task_id} from database")
+                return database_result
+        except Exception as e:
+            logger.warning(f"Database query failed for task {task_id}, falling back to files: {str(e)}")
+    
+    # Fallback to original file-based approach
+    logger.info(f"Using file-based retrieval for task {task_id}")
+    return get_task_result_from_files(task_id)
+
+
+def get_task_result_from_files(task_id: str) -> Dict[str, Any]:
+    """Get the final result for a completed task from JSON files (original implementation)."""
     task_dir = f"/app/data/videos/{task_id}"
     
     result = {}
@@ -209,7 +278,28 @@ def get_task_result(task_id: str) -> Dict[str, Any]:
     return result
 
 def get_all_videos() -> List[Dict[str, Any]]:
-    """Get all processed videos with metadata and stats."""
+    """
+    Get all processed videos with metadata and stats.
+    
+    Uses database if available, falls back to JSON files for backward compatibility.
+    """
+    # Try database first if available
+    if DATABASE_AVAILABLE:
+        try:
+            database_videos = get_all_videos_from_database()
+            if database_videos:  # If we got results from database
+                logger.info(f"Retrieved {len(database_videos)} videos from database")
+                return database_videos
+        except Exception as e:
+            logger.warning(f"Database query failed, falling back to file system: {str(e)}")
+    
+    # Fallback to original file-based approach
+    logger.info("Using file-based video retrieval")
+    return get_all_videos_from_files()
+
+
+def get_all_videos_from_files() -> List[Dict[str, Any]]:
+    """Get all processed videos from JSON files (original implementation)."""
     videos = []
     videos_dir = "/app/data/videos"
     
@@ -272,22 +362,3 @@ def get_all_videos() -> List[Dict[str, Any]]:
     # Sort by processed date (most recent first)
     return sorted(videos, key=lambda x: x.get('processed_date', ''), reverse=True)
 
-def format_duration(seconds: int) -> str:
-    """Format duration in seconds to MM:SS format."""
-    if not seconds:
-        return "0:00"
-    
-    mins = seconds // 60
-    secs = seconds % 60
-    return f"{mins}:{secs:02d}"
-
-def format_date(date_str: str) -> str:
-    """Format ISO date string to readable format."""
-    if not date_str:
-        return "Unknown"
-    
-    try:
-        dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
-        return dt.strftime("%b %d, %Y")
-    except (ValueError, AttributeError):
-        return "Unknown"
