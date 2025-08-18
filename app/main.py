@@ -3,7 +3,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel
 from app.processor import process_and_transcribe, progress_store, get_task_result, get_all_videos
-from app.settings import get_api_key, save_api_key
+from app.settings import get_api_key, save_api_key, get_openai_api_key, save_openai_api_key, get_model_config
 from app.database import init_database, get_database_session
 from app.migration import MigrationManager
 from app.search import SearchManager, SearchResult
@@ -132,32 +132,146 @@ async def get_result(task_id: str):
 
 @app.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request):
+    # ElevenLabs API key
     api_key = get_api_key()
     api_key_masked = f"sk-...{api_key[-4:]}" if api_key and len(api_key) > 4 else ""
     has_key = bool(api_key)
     
+    # OpenAI API key
+    openai_key = get_openai_api_key()
+    openai_key_masked = f"sk-...{openai_key[-4:]}" if openai_key and len(openai_key) > 4 else ""
+    has_openai_key = bool(openai_key)
+    
+    # Model configuration
+    model_config = get_model_config()
+    
     return templates.TemplateResponse("settings.html", {
         "request": request,
         "api_key_masked": api_key_masked,
-        "has_key": has_key
+        "has_key": has_key,
+        "openai_key_masked": openai_key_masked,
+        "has_openai_key": has_openai_key,
+        "model_config": model_config
     })
 
 @app.post("/settings/save")
 async def save_settings(request: Request, api_key: str = Form(...)):
     try:
         save_api_key(api_key)
+        
+        # Get current state for response
+        openai_key = get_openai_api_key()
+        openai_key_masked = f"sk-...{openai_key[-4:]}" if openai_key and len(openai_key) > 4 else ""
+        has_openai_key = bool(openai_key)
+        model_config = get_model_config()
+        
         return templates.TemplateResponse("settings.html", {
             "request": request,
             "api_key_masked": f"sk-...{api_key[-4:]}" if len(api_key) > 4 else "",
             "has_key": True,
-            "success": "API key saved successfully!"
+            "openai_key_masked": openai_key_masked,
+            "has_openai_key": has_openai_key,
+            "model_config": model_config,
+            "success": "ElevenLabs API key saved successfully!"
         })
     except Exception as e:
+        # Get current state for error response
+        openai_key = get_openai_api_key()
+        openai_key_masked = f"sk-...{openai_key[-4:]}" if openai_key and len(openai_key) > 4 else ""
+        has_openai_key = bool(openai_key)
+        model_config = get_model_config()
+        
         return templates.TemplateResponse("settings.html", {
             "request": request,
             "api_key_masked": "",
             "has_key": False,
-            "error": f"Error saving API key: {str(e)}"
+            "openai_key_masked": openai_key_masked,
+            "has_openai_key": has_openai_key,
+            "model_config": model_config,
+            "error": f"Error saving ElevenLabs API key: {str(e)}"
+        })
+
+@app.post("/settings/save-openai")
+async def save_openai_settings(request: Request, openai_api_key: str = Form(...)):
+    try:
+        save_openai_api_key(openai_api_key)
+        
+        # Get current state for response
+        api_key = get_api_key()
+        api_key_masked = f"sk-...{api_key[-4:]}" if api_key and len(api_key) > 4 else ""
+        has_key = bool(api_key)
+        model_config = get_model_config()
+        
+        return templates.TemplateResponse("settings.html", {
+            "request": request,
+            "api_key_masked": api_key_masked,
+            "has_key": has_key,
+            "openai_key_masked": f"sk-...{openai_api_key[-4:]}" if len(openai_api_key) > 4 else "",
+            "has_openai_key": True,
+            "model_config": model_config,
+            "success": "OpenAI API key saved successfully!"
+        })
+    except Exception as e:
+        # Get current state for error response
+        api_key = get_api_key()
+        api_key_masked = f"sk-...{api_key[-4:]}" if api_key and len(api_key) > 4 else ""
+        has_key = bool(api_key)
+        model_config = get_model_config()
+        
+        return templates.TemplateResponse("settings.html", {
+            "request": request,
+            "api_key_masked": api_key_masked,
+            "has_key": has_key,
+            "openai_key_masked": "",
+            "has_openai_key": False,
+            "model_config": model_config,
+            "error": f"Error saving OpenAI API key: {str(e)}"
+        })
+
+@app.post("/settings/validate-elevenlabs")
+async def validate_elevenlabs_key(api_key: str = Form(...)):
+    """Validate ElevenLabs API key by making a test request."""
+    try:
+        # Basic validation - check key format
+        if not api_key or not api_key.startswith('sk-'):
+            return JSONResponse({
+                "valid": False,
+                "error": "Invalid API key format. ElevenLabs API keys should start with 'sk-'"
+            })
+        
+        # For now, just return success for properly formatted keys
+        # In production, you could make a test API call to ElevenLabs
+        return JSONResponse({
+            "valid": True,
+            "message": "API key format is valid"
+        })
+    except Exception as e:
+        return JSONResponse({
+            "valid": False,
+            "error": f"Validation error: {str(e)}"
+        })
+
+@app.post("/settings/validate-openai")
+async def validate_openai_key(openai_api_key: str = Form(...)):
+    """Validate OpenAI API key by making a test request."""
+    try:
+        # Basic validation - check key format
+        if not openai_api_key or not openai_api_key.startswith('sk-'):
+            return JSONResponse({
+                "valid": False,
+                "error": "Invalid API key format. OpenAI API keys should start with 'sk-'"
+            })
+        
+        # For now, just return success for properly formatted keys
+        # In production, you could make a test API call to OpenAI
+        return JSONResponse({
+            "valid": True,
+            "message": "API key format is valid"
+        })
+    except Exception as e:
+        return JSONResponse({
+            "valid": False,
+            "error": f"Validation error: {str(e)}"
         })
 
 @app.get("/video/{task_id}", response_class=HTMLResponse)

@@ -104,3 +104,6 @@ docker compose exec app bash
 # View logs
 docker compose logs -f app
 ```
+
+## Remember
+**IMPORTANT**: We are running EVERYTHING in docker. We use the "docker compose" syntax. No hyphen.
