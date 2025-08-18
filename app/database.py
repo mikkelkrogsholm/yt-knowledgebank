@@ -341,6 +341,126 @@ class Summary(Base):
         return f"<Summary(id='{self.id}', video_id='{self.video_id}', type='{self.summary_type}')>"
 
 
+class QASession(Base):
+    """
+    QASession model representing question-answering conversation sessions.
+    
+    Groups related questions and answers into conversation threads
+    for context maintenance and history tracking.
+    """
+    __tablename__ = 'qa_sessions'
+    
+    # Primary key
+    id = Column(String, primary_key=True, nullable=False)
+    
+    # Session metadata
+    user_id = Column(String, nullable=True)  # Optional user identification
+    session_token = Column(String, nullable=True)  # Optional session token
+    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    last_activity = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    
+    # Relationships
+    exchanges = relationship(
+        "QAExchange", 
+        back_populates="session", 
+        cascade="all, delete-orphan",
+        order_by="QAExchange.timestamp"
+    )
+    
+    # Index for efficient querying
+    __table_args__ = (
+        Index('idx_qa_session_user', 'user_id'),
+        Index('idx_qa_session_created', 'created_at'),
+        Index('idx_qa_session_activity', 'last_activity'),
+    )
+    
+    def __repr__(self):
+        return f"<QASession(id='{self.id}', user_id='{self.user_id}', created='{self.created_at}')>"
+
+
+class QAExchange(Base):
+    """
+    QAExchange model representing individual question-answer pairs.
+    
+    Tracks questions, generated answers, source attribution, and metadata
+    for each exchange within a conversation session.
+    """
+    __tablename__ = 'qa_exchanges'
+    
+    # Primary key
+    id = Column(String, primary_key=True, nullable=False)
+    
+    # Foreign key to session
+    session_id = Column(String, ForeignKey('qa_sessions.id'), nullable=False)
+    
+    # Question and answer content
+    question = Column(Text, nullable=False)
+    answer = Column(Text, nullable=False)
+    sources = Column(Text, nullable=True)  # JSON string of source references
+    context_used = Column(Text, nullable=True)  # Context chunks used for generation
+    
+    # Metadata
+    response_time_ms = Column(Integer, nullable=True)  # Response generation time
+    model_used = Column(String, nullable=True)  # AI model used for generation
+    timestamp = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    
+    # Relationships
+    session = relationship("QASession", back_populates="exchanges")
+    feedback = relationship(
+        "AnswerFeedback", 
+        back_populates="exchange", 
+        cascade="all, delete-orphan"
+    )
+    
+    # Index for efficient querying
+    __table_args__ = (
+        Index('idx_qa_exchange_session', 'session_id'),
+        Index('idx_qa_exchange_timestamp', 'timestamp'),
+        Index('idx_qa_exchange_response_time', 'response_time_ms'),
+    )
+    
+    def __repr__(self):
+        return f"<QAExchange(id='{self.id}', session_id='{self.session_id}', timestamp='{self.timestamp}')>"
+
+
+class AnswerFeedback(Base):
+    """
+    AnswerFeedback model representing user feedback on generated answers.
+    
+    Tracks rating and qualitative feedback to improve answer quality
+    and understand user satisfaction.
+    """
+    __tablename__ = 'answer_feedback'
+    
+    # Primary key
+    id = Column(String, primary_key=True, nullable=False)
+    
+    # Foreign key to exchange
+    exchange_id = Column(String, ForeignKey('qa_exchanges.id'), nullable=False)
+    
+    # Feedback data
+    rating = Column(Integer, nullable=False)  # 1-5 rating scale
+    feedback_text = Column(Text, nullable=True)  # Optional qualitative feedback
+    feedback_type = Column(String, nullable=True)  # helpful, accurate, incomplete, incorrect
+    
+    # Metadata
+    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    
+    # Relationships
+    exchange = relationship("QAExchange", back_populates="feedback")
+    
+    # Index for efficient querying
+    __table_args__ = (
+        Index('idx_feedback_exchange', 'exchange_id'),
+        Index('idx_feedback_rating', 'rating'),
+        Index('idx_feedback_type', 'feedback_type'),
+        Index('idx_feedback_created', 'created_at'),
+    )
+    
+    def __repr__(self):
+        return f"<AnswerFeedback(id='{self.id}', exchange_id='{self.exchange_id}', rating={self.rating})>"
+
+
 class DatabaseManager:
     """
     Database connection and session management.
