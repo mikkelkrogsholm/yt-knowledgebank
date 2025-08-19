@@ -15,7 +15,6 @@ from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 
-import openai
 from sqlalchemy.orm import Session
 
 from app.database import Topic, VideoTopic, Video, TranscriptChunk

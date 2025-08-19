@@ -38,14 +38,19 @@ class SummaryGenerator:
     
     def __init__(self):
         """Initialize the summary generator."""
-        self.api_key = get_openai_api_key()
-        self.model_config = get_model_config()
-        
-        if not self.api_key:
-            raise ValueError("OpenAI API key not configured. Please set it in settings.")
-        
-        # Set up OpenAI client (new v1.0+ pattern)
-        self.client = OpenAI(api_key=self.api_key)
+        try:
+            self.api_key = get_openai_api_key()
+            self.model_config = get_model_config()
+            
+            if not self.api_key:
+                raise ValueError("OpenAI API key not configured. Please set it in settings.")
+            
+            # Set up OpenAI client (new v1.0+ pattern)
+            self.client = OpenAI(api_key=self.api_key)
+        except ImportError as e:
+            raise ImportError(f"Failed to import OpenAI library: {e}")
+        except Exception as e:
+            raise ValueError(f"Failed to initialize SummaryGenerator: {e}")
         
         # Summarization model configuration
         self.model = self.model_config["models"]["summarization"]
