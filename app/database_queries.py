@@ -348,7 +348,7 @@ def delete_video_cascade(video_id: str) -> Dict[str, int]:
         
         try:
             # These tables might not exist yet
-            from app.database import Summary, EntityMention, VideoTopic, QASession
+            from app.database import Summary, EntityMention, VideoTopic
             
             summary_count = session.query(Summary).filter(Summary.video_id == video_id).count()
             
@@ -359,7 +359,9 @@ def delete_video_cascade(video_id: str) -> Dict[str, int]:
             
             topic_count = session.query(VideoTopic).filter(VideoTopic.video_id == video_id).count()
             
-            qa_count = session.query(QASession).filter(QASession.video_id == video_id).count()
+            # Note: QASession doesn't directly relate to videos, so we skip counting them
+            # QA sessions are conversation-based, not video-specific
+            qa_count = 0
             
         except ImportError:
             # Tables don't exist yet, that's fine
