@@ -28,43 +28,80 @@ function errorBoundary() {
         },
         
         handleError(error, context = 'Unknown') {
-            // Ignore null/undefined errors and "unknown error occurred" errors
-            // that come from Alpine.js internal handling to prevent cascading error dialogs
-            if (!error || 
-                (error.message && error.message.includes('Unknown error occurred')) ||
-                (context === 'Global error' && !error.message)) {
-                console.warn('Ignoring cascade error:', error, context);
+            // Robust null/undefined error handling to prevent cascade failures
+            if (!error) {
+                console.warn(`[ErrorBoundary] ${context}: Null or undefined error - ignoring to prevent cascade`);
+                return;
+            }
+            
+            // Handle string or primitive errors that might be empty
+            if (typeof error === 'string' && !error.trim()) {
+                console.warn(`[ErrorBoundary] ${context}: Empty string error - ignoring to prevent cascade`);
+                return;
+            }
+            
+            // Ignore "unknown error occurred" errors from Alpine.js internal handling
+            const errorMessage = this.getErrorMessage(error);
+            if (errorMessage && errorMessage.includes('Unknown error occurred')) {
+                console.warn(`[ErrorBoundary] ${context}: Ignoring cascade error:`, error);
+                return;
+            }
+            
+            // Additional check for global errors without meaningful content
+            if (context === 'Global error' && (!errorMessage || errorMessage === 'Unknown error')) {
+                console.warn(`[ErrorBoundary] ${context}: Ignoring meaningless global error:`, error);
                 return;
             }
             
             this.hasError = true;
             
-            // Handle errors properly
-            if (error instanceof Error) {
-                this.error = error;
-                this.errorMessage = error.message || 'Error occurred';
-            } else {
-                this.error = new Error(String(error));
-                this.errorMessage = String(error);
+            // Safe error object creation with fallbacks
+            try {
+                if (error instanceof Error) {
+                    this.error = error;
+                    this.errorMessage = this.getErrorMessage(error) || 'An error occurred';
+                } else {
+                    // Handle non-Error objects safely
+                    const errorString = this.safeStringify(error);
+                    this.error = new Error(errorString);
+                    this.errorMessage = errorString;
+                }
+            } catch (conversionError) {
+                // Fallback if error object processing fails
+                console.error(`[ErrorBoundary] Failed to process error object:`, conversionError);
+                this.error = new Error('Error processing failed - unknown error occurred');
+                this.errorMessage = 'An unknown error occurred';
             }
             
-            this.errorContext = context;
+            this.errorContext = context || 'Unknown';
             this.errorId = this.generateErrorId();
             this.showDetails = false;
             
-            // Log error for debugging
-            console.error(`[ErrorBoundary] ${context}:`, this.error);
+            // Safe logging
+            try {
+                console.error(`[ErrorBoundary] ${this.errorContext}:`, this.error);
+            } catch (logError) {
+                console.error(`[ErrorBoundary] Logging failed:`, logError);
+            }
             
-            // Emit error handled event
-            eventSystem.emit('errorHandled', {
-                error: this.error,
-                context,
-                errorId: this.errorId,
-                component: this
-            });
+            // Safe event emission
+            try {
+                eventSystem.emit('errorHandled', {
+                    error: this.error,
+                    context: this.errorContext,
+                    errorId: this.errorId,
+                    component: this
+                });
+            } catch (emitError) {
+                console.error(`[ErrorBoundary] Event emission failed:`, emitError);
+            }
             
-            // Show user notification
-            this.showErrorNotification();
+            // Safe notification display
+            try {
+                this.showErrorNotification();
+            } catch (notificationError) {
+                console.error(`[ErrorBoundary] Notification display failed:`, notificationError);
+            }
         },
         
         showErrorNotification() {
@@ -73,9 +110,11 @@ function errorBoundary() {
         },
         
         getUserFriendlyMessage() {
-            if (!this.error) return 'An unknown error occurred';
+            const errorMessage = this.getSafeErrorMessage();
             
-            const errorMessage = this.errorMessage || this.error?.message || '';
+            if (!errorMessage) {
+                return 'An unknown error occurred';
+            }
             
             // Network errors
             if (errorMessage.includes('fetch') || errorMessage.includes('Network')) {
@@ -191,6 +230,84 @@ function errorBoundary() {
             return `error_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         },
         
+        /**
+         * Safely extract error message from error object
+         * @param {any} error - Error object or value
+         * @returns {string} Safe error message
+         */
+        getErrorMessage(error) {
+            if (!error) return '';
+            
+            try {
+                if (typeof error === 'string') {
+                    return error;
+                }
+                
+                if (error instanceof Error) {
+                    return error.message || '';
+                }
+                
+                // Handle objects with message property
+                if (error && typeof error === 'object' && error.message) {
+                    return String(error.message);
+                }
+                
+                // Handle objects with toString method
+                if (error && typeof error.toString === 'function') {
+                    return error.toString();
+                }
+                
+                return String(error);
+            } catch (extractionError) {
+                console.warn('Error extracting message from error object:', extractionError);
+                return 'Unknown error';
+            }
+        },
+        
+        /**
+         * Get safe error message for display purposes
+         * @returns {string} Safe error message
+         */
+        getSafeErrorMessage() {
+            try {
+                return this.errorMessage || this.getErrorMessage(this.error) || '';
+            } catch (error) {
+                console.warn('Error getting safe error message:', error);
+                return '';
+            }
+        },
+        
+        /**
+         * Safely convert any value to string
+         * @param {any} value - Value to convert
+         * @returns {string} Safe string representation
+         */
+        safeStringify(value) {
+            if (value === null) return 'null';
+            if (value === undefined) return 'undefined';
+            
+            try {
+                if (typeof value === 'string') {
+                    return value || 'Empty string';
+                }
+                
+                if (typeof value === 'object') {
+                    // Try JSON.stringify first
+                    try {
+                        return JSON.stringify(value);
+                    } catch (jsonError) {
+                        // Fallback to toString
+                        return value.toString();
+                    }
+                }
+                
+                return String(value);
+            } catch (stringifyError) {
+                console.warn('Error stringifying value:', stringifyError);
+                return 'Unstringifiable value';
+            }
+        },
+        
         getErrorTitle() {
             const contextTitles = {
                 'Network error': 'Connection Problem',
@@ -205,7 +322,11 @@ function errorBoundary() {
         },
         
         getErrorIcon() {
-            const errorMessage = this.error?.message || '';
+            const errorMessage = this.getSafeErrorMessage();
+            
+            if (!errorMessage) {
+                return '❌';
+            }
             
             if (errorMessage.includes('Network') || errorMessage.includes('fetch')) {
                 return '🌐';
@@ -229,7 +350,9 @@ function errorBoundary() {
         canRetry() {
             if (!this.error) return false;
             
-            const errorMessage = this.errorMessage || this.error?.message || '';
+            const errorMessage = this.getSafeErrorMessage();
+            
+            if (!errorMessage) return false;
             
             // Don't retry on client errors (4xx)
             if (errorMessage.includes('400') || 
@@ -248,10 +371,14 @@ function errorBoundary() {
         },
         
         getSuggestedActions() {
-            if (!this.error) return [];
-            
-            const errorMessage = this.errorMessage || this.error?.message || '';
+            const errorMessage = this.getSafeErrorMessage();
             const actions = [];
+            
+            if (!errorMessage) {
+                actions.push('Try refreshing the page');
+                actions.push('Contact support if the problem persists');
+                return actions;
+            }
             
             if (errorMessage.includes('Network') || errorMessage.includes('fetch')) {
                 actions.push('Check your internet connection');

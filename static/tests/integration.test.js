@@ -360,6 +360,98 @@ integrationTest.test('Error handling works across components', async () => {
     integrationTest.assert(globalErrorCaught, 'Global error handler should catch errors');
 });
 
+// Test EventSystem null/undefined error handling - Issue #11 fixes
+integrationTest.test('EventSystem handles null/undefined errors gracefully', async () => {
+    let errorHandlerCalled = false;
+    
+    // Set up error handler
+    eventSystem.onError((error, context) => {
+        errorHandlerCalled = true;
+    });
+    
+    // Test null error - should not trigger error handler
+    eventSystem.handleError(null, 'Null test');
+    await integrationTest.wait(10);
+    integrationTest.assert(!errorHandlerCalled, 'Null error should not trigger error handlers');
+    
+    // Test undefined error - should not trigger error handler  
+    eventSystem.handleError(undefined, 'Undefined test');
+    await integrationTest.wait(10);
+    integrationTest.assert(!errorHandlerCalled, 'Undefined error should not trigger error handlers');
+    
+    // Test empty string error - should not trigger error handler
+    eventSystem.handleError('', 'Empty string test');
+    await integrationTest.wait(10);
+    integrationTest.assert(!errorHandlerCalled, 'Empty string error should not trigger error handlers');
+});
+
+integrationTest.test('EventSystem getErrorMessage utility handles various inputs', () => {
+    // Test null/undefined
+    integrationTest.assertEqual(eventSystem.getErrorMessage(null), '', 'Should return empty string for null');
+    integrationTest.assertEqual(eventSystem.getErrorMessage(undefined), '', 'Should return empty string for undefined');
+    
+    // Test string inputs
+    integrationTest.assertEqual(eventSystem.getErrorMessage('test error'), 'test error', 'Should return string as-is');
+    integrationTest.assertEqual(eventSystem.getErrorMessage(''), '', 'Should return empty string as-is');
+    
+    // Test Error objects
+    const error = new Error('Test message');
+    integrationTest.assertEqual(eventSystem.getErrorMessage(error), 'Test message', 'Should extract message from Error');
+    
+    // Test objects with message property
+    const objectWithMessage = { message: 'Object message' };
+    integrationTest.assertEqual(eventSystem.getErrorMessage(objectWithMessage), 'Object message', 'Should extract message from object');
+});
+
+integrationTest.test('EventSystem safeStringify handles various inputs', () => {
+    // Test null/undefined
+    integrationTest.assertEqual(eventSystem.safeStringify(null), 'null', 'Should convert null to string');
+    integrationTest.assertEqual(eventSystem.safeStringify(undefined), 'undefined', 'Should convert undefined to string');
+    
+    // Test empty string
+    integrationTest.assertEqual(eventSystem.safeStringify(''), 'Empty string', 'Should handle empty string');
+    
+    // Test normal string
+    integrationTest.assertEqual(eventSystem.safeStringify('test'), 'test', 'Should return normal string as-is');
+    
+    // Test objects
+    const obj = { key: 'value' };
+    const stringified = eventSystem.safeStringify(obj);
+    integrationTest.assertType(stringified, 'string', 'Should convert object to string');
+    integrationTest.assert(stringified.length > 0, 'Should produce non-empty string');
+});
+
+integrationTest.test('EventSystem emit handles invalid handlers gracefully', async () => {
+    let validHandlerCalled = false;
+    let errorEmitted = false;
+    
+    // Set up error event listener
+    eventSystem.on('error', () => {
+        errorEmitted = true;
+    });
+    
+    // Add valid handler
+    eventSystem.on('test-invalid-handlers', () => {
+        validHandlerCalled = true;
+    });
+    
+    // Manually add invalid handler to test safety
+    const handlers = eventSystem.events.get('test-invalid-handlers');
+    if (handlers) {
+        handlers.add(null); // Add null handler
+        handlers.add(undefined); // Add undefined handler
+        handlers.add('not-a-function'); // Add non-function
+    }
+    
+    // Emit event - should handle invalid handlers gracefully
+    eventSystem.emit('test-invalid-handlers');
+    
+    await integrationTest.wait(10);
+    
+    integrationTest.assert(validHandlerCalled, 'Valid handler should still be called');
+    integrationTest.assert(!errorEmitted, 'Invalid handlers should not cause error events');
+});
+
 // Test component cleanup and memory management
 integrationTest.test('Components clean up properly', () => {
     // Test event subscription cleanup

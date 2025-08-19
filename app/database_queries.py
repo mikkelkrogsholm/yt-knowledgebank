@@ -319,3 +319,76 @@ def get_database_stats() -> Dict[str, Any]:
             'database_healthy': False,
             'error': str(e)
         }
+
+
+def delete_video_cascade(video_id: str) -> Dict[str, int]:
+    """
+    Delete a video and all associated data using cascade deletion.
+    
+    Returns statistics about what was deleted.
+    """
+    try:
+        session = get_database_session()
+        
+        # Get video first to ensure it exists
+        video = session.query(Video).filter(Video.id == video_id).first()
+        if not video:
+            session.close()
+            raise ValueError(f"Video {video_id} not found")
+        
+        # Count related records before deletion
+        transcript_count = session.query(TranscriptChunk).filter(TranscriptChunk.video_id == video_id).count()
+        speaker_count = session.query(Speaker).filter(Speaker.video_id == video_id).count()
+        
+        # Count AI-generated content if tables exist
+        summary_count = 0
+        entity_count = 0
+        topic_count = 0
+        qa_count = 0
+        
+        try:
+            # These tables might not exist yet
+            from app.database import Summary, EntityMention, VideoTopic, QASession
+            
+            summary_count = session.query(Summary).filter(Summary.video_id == video_id).count()
+            
+            # Count entity mentions for this video
+            entity_count = session.query(EntityMention).join(TranscriptChunk).filter(
+                TranscriptChunk.video_id == video_id
+            ).count()
+            
+            topic_count = session.query(VideoTopic).filter(VideoTopic.video_id == video_id).count()
+            
+            qa_count = session.query(QASession).filter(QASession.video_id == video_id).count()
+            
+        except ImportError:
+            # Tables don't exist yet, that's fine
+            pass
+        
+        # Delete video (cascade will handle related records)
+        session.delete(video)
+        session.commit()
+        session.close()
+        
+        logger.info(f"Deleted video {video_id} with {transcript_count} transcript chunks, "
+                   f"{speaker_count} speakers, {summary_count} summaries, "
+                   f"{entity_count} entity mentions, {topic_count} topics, {qa_count} Q&A sessions")
+        
+        return {
+            'video_deleted': 1,
+            'transcript_chunks_deleted': transcript_count,
+            'speakers_deleted': speaker_count,
+            'summaries_deleted': summary_count,
+            'entity_mentions_deleted': entity_count,
+            'topics_deleted': topic_count,
+            'qa_sessions_deleted': qa_count
+        }
+        
+    except Exception as e:
+        logger.error(f"Error deleting video {video_id}: {str(e)}")
+        try:
+            session.rollback()
+            session.close()
+        except:
+            pass
+        raise

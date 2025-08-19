@@ -32,19 +32,22 @@ function simpleSearchBar() {
                 });
                 
                 // Transform search results into a response format
+                const sources = (response.results || []).map((result, index) => ({
+                    id: `result_${index}_${result.video_id || 'unknown'}`,
+                    video_id: result.video_id || 'unknown',
+                    title: result.video_title || `Video ${result.video_id || 'unknown'}`,
+                    start_ms: result.start_ms || 0,
+                    text: result.text || '',
+                    highlighted_text: result.highlighted_text || result.text || '',
+                    rank: result.rank || 0
+                })).filter(source => source.video_id !== 'unknown'); // Filter out invalid results
+                
                 this.lastResponse = {
                     query: this.query,
                     answer: this.formatSearchResults(response),
-                    sources: response.results.map(result => ({
-                        video_id: result.video_id,
-                        title: result.video_title || `Video ${result.video_id}`,
-                        start_ms: result.start_ms,
-                        text: result.text,
-                        highlighted_text: result.highlighted_text,
-                        rank: result.rank
-                    })),
-                    total_found: response.total_found,
-                    response_time_ms: response.query_time_ms
+                    sources: sources,
+                    total_found: response.total_found || 0,
+                    response_time_ms: response.query_time_ms || 0
                 };
                 
             } catch (error) {
@@ -66,10 +69,10 @@ function simpleSearchBar() {
             const topResults = response.results.slice(0, 5);
             let html = `<p>Found <strong>${response.total_found}</strong> results for "<strong>${this.query}</strong>":</p><ul class="mt-3 space-y-2">`;
             
-            topResults.forEach(result => {
-                html += `<li class="border-l-2 border-primary-200 pl-3">
+            topResults.forEach((result, index) => {
+                html += `<li class="border-l-2 border-primary-200 pl-3" data-result-index="${index}">
                     <div class="text-sm">${result.highlighted_text || result.text}</div>
-                    <div class="text-xs text-gray-500">Score: ${Math.round(result.rank * 100)}%</div>
+                    <div class="text-xs text-gray-500">Score: ${this.formatRelevanceScore(result.rank)}%</div>
                 </li>`;
             });
             
@@ -98,6 +101,48 @@ function simpleSearchBar() {
             // Navigate to video page with timestamp
             const url = `/video/${videoId}?t=${Math.floor(startMs / 1000)}`;
             window.open(url, '_blank');
+        },
+        
+        formatRelevanceScore(rank) {
+            // Convert FTS5 BM25 rank (negative value, closer to 0 = better match) 
+            // to positive percentage (higher = better match)
+            // FTS5 ranks typically range from 0 to -5 or lower
+            
+            if (!rank || rank === 0) return 100;
+            
+            // Since rank is negative, we need to convert it to a positive scale
+            // Better matches have ranks closer to 0 (like -0.001)
+            // Worse matches have more negative ranks (like -4.5)
+            
+            // Use exponential decay to convert negative rank to percentage
+            // This ensures better matches (closer to 0) get higher percentages
+            const normalizedScore = Math.max(0, Math.min(100, Math.exp(rank) * 100));
+            
+            return Math.round(normalizedScore);
+        },
+
+        renderSourcesList() {
+            if (!this.lastResponse?.sources || !Array.isArray(this.lastResponse.sources)) {
+                return '';
+            }
+            
+            return this.lastResponse.sources.map((source, index) => {
+                const title = source.title || 'Untitled';
+                const timestamp = this.formatTimestamp(source.start_ms || 0);
+                const videoId = source.video_id || '';
+                const startMs = source.start_ms || 0;
+                
+                return `<div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                    <div class="flex-1">
+                        <div class="font-medium text-sm">${title}</div>
+                        <div class="text-xs text-gray-600 dark:text-gray-400">${timestamp}</div>
+                    </div>
+                    <button onclick="window.open('/video/${videoId}?t=${Math.floor(startMs / 1000)}', '_blank')" 
+                            class="text-primary-600 hover:text-primary-700 text-sm font-medium">
+                        Watch →
+                    </button>
+                </div>`;
+            }).join('');
         }
     };
 }

@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Error Handling Improvements Test - Issue #11</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f8fafc;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #1a202c;
+            border-bottom: 2px solid #4299e1;
+            padding-bottom: 10px;
+        }
+        .status {
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        .success { background: #f0fff4; color: #2d5a2d; border: 1px solid #9ae6b4; }
+        .error { background: #fef5f5; color: #c53030; border: 1px solid #feb2b2; }
+        .info { background: #edf2f7; color: #2d3748; border: 1px solid #cbd5e0; }
+        #console {
+            background: #1a202c;
+            color: #e2e8f0;
+            padding: 20px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+        button {
+            background: #4299e1;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        button:hover { background: #3182ce; }
+        button:disabled { background: #a0aec0; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Error Handling Improvements Test</h1>
+        <p><strong>Issue #11:</strong> Improve error handling for null/undefined values in error boundary to prevent cascade failures.</p>
+        
+        <div class="info">
+            <strong>What we're testing:</strong>
+            <ul>
+                <li>Error boundary handles null/undefined errors gracefully</li>
+                <li>No cascade error dialogs are generated</li>
+                <li>Fallback error messages work correctly</li>
+                <li>Error processing never throws errors itself</li>
+            </ul>
+        </div>
+        
+        <div>
+            <button onclick="runErrorTests()" id="runButton">Run Error Handling Tests</button>
+            <button onclick="simulateNullErrors()" id="simulateButton">Simulate Null Error Scenarios</button>
+            <button onclick="clearConsole()" id="clearButton">Clear Console</button>
+        </div>
+        
+        <div id="status" class="status info">Ready to run tests...</div>
+        
+        <div id="console"></div>
+    </div>
+
+    <!-- Load required components -->
+    <script src="/static/js/event-system.js"></script>
+    <script src="/static/js/components/error-boundary.js"></script>
+    <script src="test-error-improvements.js"></script>
+    
+    <script>
+        const consoleDiv = document.getElementById('console');
+        const statusDiv = document.getElementById('status');
+        
+        // Override console.log to show in our console div
+        const originalLog = console.log;
+        const originalError = console.error;
+        
+        console.log = function(...args) {
+            originalLog.apply(console, args);
+            consoleDiv.textContent += args.join(' ') + '\n';
+            consoleDiv.scrollTop = consoleDiv.scrollHeight;
+        };
+        
+        console.error = function(...args) {
+            originalError.apply(console, args);
+            consoleDiv.textContent += '🔴 ERROR: ' + args.join(' ') + '\n';
+            consoleDiv.scrollTop = consoleDiv.scrollHeight;
+        };
+        
+        function clearConsole() {
+            consoleDiv.textContent = '';
+        }
+        
+        function updateStatus(message, type = 'info') {
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+        }
+        
+        function runErrorTests() {
+            clearConsole();
+            updateStatus('Running error handling tests...', 'info');
+            
+            try {
+                const success = runAllTests();
+                if (success) {
+                    updateStatus('✅ All tests passed! Error handling improvements working correctly.', 'success');
+                } else {
+                    updateStatus('❌ Some tests failed. Check console for details.', 'error');
+                }
+            } catch (error) {
+                updateStatus('❌ Test execution failed: ' + error.message, 'error');
+                console.error('Test execution error:', error);
+            }
+        }
+        
+        function simulateNullErrors() {
+            clearConsole();
+            updateStatus('Simulating null error scenarios...', 'info');
+            
+            console.log('🧪 Simulating real-world null/undefined error scenarios...\n');
+            
+            // Create error boundary component
+            const errorBoundary = window.errorBoundary();
+            
+            // Test scenarios that previously caused cascade failures
+            console.log('1. Handling null error object...');
+            errorBoundary.handleError(null, 'Simulated null error');
+            
+            console.log('2. Handling undefined error object...');
+            errorBoundary.handleError(undefined, 'Simulated undefined error');
+            
+            console.log('3. Handling empty string error...');
+            errorBoundary.handleError('', 'Simulated empty string error');
+            
+            console.log('4. Handling malformed error object...');
+            errorBoundary.handleError({ randomProperty: 'value' }, 'Simulated malformed error');
+            
+            console.log('5. Testing EventSystem error handling...');
+            eventSystem.handleError(null, 'EventSystem null test');
+            eventSystem.handleError(undefined, 'EventSystem undefined test');
+            
+            console.log('6. Testing error message extraction from null states...');
+            errorBoundary.error = null;
+            errorBoundary.errorMessage = null;
+            const message = errorBoundary.getUserFriendlyMessage();
+            console.log('   Friendly message for null error:', message);
+            
+            console.log('\n✅ Simulation complete! No cascade errors should have occurred.');
+            console.log('If you see this message, the error boundary is handling null values correctly.');
+            
+            updateStatus('✅ Null error simulation complete. No cascade failures detected!', 'success');
+        }
+        
+        // Auto-run tests on page load if requested
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('autorun') === 'true') {
+            setTimeout(runErrorTests, 1000);
+        }
+    </script>
+</body>
+</html>

@@ -67,11 +67,18 @@ class EventSystem {
     emit(eventName, ...args) {
         const handlers = this.events.get(eventName);
         if (handlers) {
-            handlers.forEach(handler => {
+            handlers.forEach((handler, index) => {
                 try {
-                    handler(...args);
+                    if (typeof handler === 'function') {
+                        handler(...args);
+                    } else {
+                        console.warn(`Event handler ${index} for '${eventName}' is not a function:`, handler);
+                    }
                 } catch (error) {
-                    this.handleError(error, `Event handler for '${eventName}'`);
+                    // Prevent potential cascading by checking error validity
+                    if (error) {
+                        this.handleError(error, `Event handler for '${eventName}'`);
+                    }
                 }
             });
         }

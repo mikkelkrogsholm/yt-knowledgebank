@@ -727,6 +727,10 @@ GROUP BY v.id;
 
 ## Troubleshooting
 
+> **📚 Troubleshooting Resources Available**  
+> - **Quick Reference**: [Quick Troubleshooting](quick-troubleshooting.md) - Common issues & fast fixes  
+> - **Comprehensive Guide**: [Troubleshooting Guide](troubleshooting-guide.md) - Detailed solutions for all issues
+
 ### Common Issues
 
 #### 1. Database Issues

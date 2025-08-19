@@ -3,76 +3,218 @@
 {% block title %}Overview - YouTube Knowledgebank{% endblock %}
 
 {% block content %}
-<div class="max-w-6xl mx-auto">
+<div class="max-w-6xl mx-auto" x-data="advancedVideoLibrary()">
     <!-- Header with Search -->
     <div class="mb-8">
         <div class="flex justify-between items-center mb-4">
-            <h2 class="text-2xl font-bold text-gray-900">Video Library</h2>
+            <h2 class="text-2xl font-bold text-gray-900 dark:text-gray-100">Video Library</h2>
             <a href="/process" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
                 + Process New Video
             </a>
         </div>
         
-        <!-- Search Bar -->
-        <div class="mb-4">
-            <input 
-                type="text" 
-                id="searchInput"
-                placeholder="Search videos..." 
-                class="w-full max-w-md px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
+        <!-- Advanced Search and Filter Bar -->
+        <div class="space-y-4">
+            <div class="flex gap-3">
+                <div class="flex-1 relative">
+                    <input 
+                        type="text" 
+                        x-model="searchQuery"
+                        x-ref="searchInput"
+                        @input="debouncedFilter()"
+                        placeholder="Search videos by title or channel..." 
+                        class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                    >
+                </div>
+                
+                <!-- Filter Toggle -->
+                <button type="button" @click="toggleFilters()" 
+                        class="px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors relative"
+                        :class="showFilters ? 'ring-2 ring-blue-500 border-blue-500' : ''">
+                    <svg class="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4"></path>
+                    </svg>
+                    <span x-show="getActiveFilterCount() > 0" 
+                          class="absolute -top-2 -right-2 w-5 h-5 bg-blue-600 text-white text-xs rounded-full flex items-center justify-center"
+                          x-text="getActiveFilterCount()"></span>
+                </button>
+                
+                <!-- Sort Options -->
+                <select x-model="sortBy" @change="applyFilters()" 
+                        class="px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
+                    <option value="date">Sort by Date</option>
+                    <option value="alphabetical">Sort Alphabetically</option>
+                    <option value="duration">Sort by Duration</option>
+                </select>
+                
+                <select x-model="sortOrder" @change="applyFilters()" 
+                        class="px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
+                    <option value="desc">Descending</option>
+                    <option value="asc">Ascending</option>
+                </select>
+            </div>
+            
+            <!-- Filter Panel -->
+            <div x-show="showFilters" 
+                 x-transition:enter="transition ease-out duration-200" 
+                 x-transition:enter-start="opacity-0 transform scale-95" 
+                 x-transition:enter-end="opacity-100 transform scale-100"
+                 x-transition:leave="transition ease-in duration-150"
+                 x-transition:leave-start="opacity-100 transform scale-100" 
+                 x-transition:leave-end="opacity-0 transform scale-95"
+                 class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 shadow-sm">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="font-semibold text-gray-900 dark:text-gray-100">Filter Videos</h3>
+                    <button @click="clearAllFilters()" 
+                            class="text-sm text-blue-600 hover:text-blue-700 font-medium">
+                        Clear All Filters
+                    </button>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <!-- Channel Filter -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Channel/Uploader</label>
+                        <input type="text" 
+                               x-model="filters.uploader" 
+                               @input="debouncedFilter()"
+                               placeholder="Filter by channel name"
+                               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
+                    </div>
+                    
+                    <!-- Duration Range -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Min Duration (minutes)</label>
+                        <input type="number" 
+                               x-model="filters.minDuration" 
+                               @input="debouncedFilter()"
+                               min="0"
+                               placeholder="e.g., 5"
+                               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Max Duration (minutes)</label>
+                        <input type="number" 
+                               x-model="filters.maxDuration" 
+                               @input="debouncedFilter()"
+                               min="0"
+                               placeholder="e.g., 60"
+                               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
+                    </div>
+                    
+                    <!-- Date Range -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">From Date</label>
+                        <input type="date" 
+                               x-model="filters.startDate" 
+                               @change="applyFilters()"
+                               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">To Date</label>
+                        <input type="date" 
+                               x-model="filters.endDate" 
+                               @change="applyFilters()"
+                               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
+                    </div>
+                </div>
+                
+                <!-- Filter Summary -->
+                <div x-show="filteredVideos.length !== originalVideos.length" class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <p class="text-sm text-gray-600 dark:text-gray-400">
+                        Showing <span x-text="paginatedVideos.length"></span> of <span x-text="filteredVideos.length"></span> filtered results 
+                        (out of <span x-text="originalVideos.length"></span> total videos)
+                    </p>
+                </div>
+            </div>
         </div>
     </div>
 
-    <!-- Video Grid -->
-    {% if videos %}
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="videoGrid">
-        {% for video in videos %}
-        <a href="/video/{{ video.task_id }}" 
-           class="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow video-card">
-            
-            <!-- Video Title -->
-            <h3 class="font-semibold text-lg text-gray-900 mb-3 line-clamp-2">
-                {{ video.title }}
-            </h3>
-            
-            <!-- Stats -->
-            <div class="flex gap-4 mb-3 text-sm text-gray-600">
-                <span class="flex items-center gap-1">
-                    ⏱ {{ video.duration_formatted }}
-                </span>
-                <span class="flex items-center gap-1">
-                    📝 {{ video.word_count|default(0) }} words
-                </span>
-                {% if video.speaker_count > 0 %}
-                <span class="flex items-center gap-1">
-                    👥 {{ video.speaker_count }} speakers
-                </span>
-                {% endif %}
+    <!-- Loading State -->
+    <div x-show="isLoading" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <template x-for="i in 6" :key="i">
+            <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+                <div class="loading-skeleton h-4 rounded mb-3"></div>
+                <div class="loading-skeleton h-4 rounded w-3/4 mb-2"></div>
+                <div class="loading-skeleton h-3 rounded w-1/2 mb-3"></div>
+                <div class="loading-skeleton h-3 rounded w-2/3"></div>
             </div>
-            
-            <!-- Uploader -->
-            <div class="text-sm text-gray-600 mb-3">
-                <span class="text-gray-500">Channel:</span> {{ video.uploader|default('Unknown') }}
-            </div>
-            
-            <!-- Processed Date -->
-            <div class="text-xs text-gray-500 border-t border-gray-100 pt-3">
-                Processed: {{ video.processed_date_formatted|default('Unknown') }}
-            </div>
-        </a>
-        {% endfor %}
+        </template>
     </div>
-    {% else %}
+
+    <!-- Video Grid -->
+    <div x-show="!isLoading && paginatedVideos.length > 0" 
+         class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <template x-for="video in paginatedVideos" :key="video.task_id">
+            <a :href="`/video/${video.task_id}`" 
+               class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md transition-shadow">
+                
+                <!-- Video Title -->
+                <h3 class="font-semibold text-lg text-gray-900 dark:text-gray-100 mb-3 line-clamp-2" x-text="video.title">
+                </h3>
+                
+                <!-- Stats -->
+                <div class="flex gap-4 mb-3 text-sm text-gray-600 dark:text-gray-400">
+                    <span class="flex items-center gap-1">
+                        ⏱ <span x-text="formatDuration(video.duration)"></span>
+                    </span>
+                    <span class="flex items-center gap-1">
+                        📝 <span x-text="video.word_count || 0"></span> words
+                    </span>
+                    <span x-show="video.speaker_count > 0" class="flex items-center gap-1">
+                        👥 <span x-text="video.speaker_count"></span> speakers
+                    </span>
+                </div>
+                
+                <!-- Uploader -->
+                <div class="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                    <span class="text-gray-500 dark:text-gray-500">Channel:</span> <span x-text="video.uploader || 'Unknown'"></span>
+                </div>
+                
+                <!-- Processed Date -->
+                <div class="text-xs text-gray-500 dark:text-gray-500 border-t border-gray-100 dark:border-gray-700 pt-3">
+                    Processed: <span x-text="formatDate(video.processed_date)"></span>
+                </div>
+            </a>
+        </template>
+    </div>
+
+    <!-- Pagination -->
+    <div x-show="!isLoading && filteredVideos.length > videosPerPage" class="mt-8 flex justify-center">
+        <nav class="flex items-center space-x-2">
+            <button @click="changePage(currentPage - 1)" 
+                    :disabled="currentPage <= 1"
+                    class="px-3 py-2 text-sm font-medium text-gray-500 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                Previous
+            </button>
+            
+            <template x-for="page in getPageNumbers()" :key="page">
+                <button @click="changePage(page)" 
+                        class="px-3 py-2 text-sm font-medium rounded-md"
+                        :class="currentPage === page ? 'bg-blue-600 text-white' : 'text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'"
+                        x-text="page">
+                </button>
+            </template>
+            
+            <button @click="changePage(currentPage + 1)" 
+                    :disabled="currentPage >= totalPages"
+                    class="px-3 py-2 text-sm font-medium text-gray-500 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                Next
+            </button>
+        </nav>
+    </div>
+
     <!-- Empty State -->
-    <div class="text-center py-16">
+    <div x-show="!isLoading && originalVideos.length === 0" class="text-center py-16">
         <div class="mb-4">
             <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
             </svg>
         </div>
-        <h3 class="text-lg font-medium text-gray-900 mb-2">No videos processed yet</h3>
-        <p class="text-gray-500 mb-6">Start building your knowledge base by processing your first YouTube video.</p>
+        <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">No videos processed yet</h3>
+        <p class="text-gray-500 dark:text-gray-400 mb-6">Start building your knowledge base by processing your first YouTube video.</p>
         <a href="/process" 
            class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors inline-flex items-center gap-2">
             <span>Process Your First Video</span>
@@ -81,26 +223,265 @@
             </svg>
         </a>
     </div>
-    {% endif %}
+
+    <!-- No Filtered Results -->
+    <div x-show="!isLoading && originalVideos.length > 0 && filteredVideos.length === 0" class="text-center py-16">
+        <div class="mb-4">
+            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+            </svg>
+        </div>
+        <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">No videos match your filters</h3>
+        <p class="text-gray-500 dark:text-gray-400 mb-6">Try adjusting your search terms or filters.</p>
+        <button @click="clearAllFilters()" 
+                class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors">
+            Clear All Filters
+        </button>
+    </div>
 </div>
 
-<!-- Search functionality -->
+<!-- Advanced Video Library Component -->
 <script>
-document.getElementById('searchInput').addEventListener('input', function(e) {
-    const searchTerm = e.target.value.toLowerCase();
-    const videoCards = document.querySelectorAll('.video-card');
-    
-    videoCards.forEach(card => {
-        const title = card.querySelector('h3').textContent.toLowerCase();
-        const uploader = card.querySelector('.text-gray-600:nth-child(2)').textContent.toLowerCase();
+function advancedVideoLibrary() {
+    return {
+        // State
+        originalVideos: {{ videos|tojsonfilter if videos else '[]' }},
+        filteredVideos: [],
+        paginatedVideos: [],
+        searchQuery: '',
+        isLoading: false,
+        showFilters: false,
         
-        if (title.includes(searchTerm) || uploader.includes(searchTerm)) {
-            card.style.display = 'block';
-        } else {
-            card.style.display = 'none';
+        // Filter state
+        filters: {
+            uploader: '',
+            minDuration: '',
+            maxDuration: '',
+            startDate: '',
+            endDate: ''
+        },
+        
+        // Sort and pagination
+        sortBy: 'date',
+        sortOrder: 'desc',
+        currentPage: 1,
+        videosPerPage: 12,
+        
+        init() {
+            // Initialize the filtered videos
+            this.filteredVideos = [...this.originalVideos];
+            this.applyFilters();
+            
+            // Set up debounced filter function
+            this.debouncedFilter = this.debounce(this.applyFilters.bind(this), 300);
+        },
+        
+        applyFilters() {
+            let filtered = [...this.originalVideos];
+            
+            // Apply text search
+            if (this.searchQuery.trim()) {
+                const query = this.searchQuery.toLowerCase();
+                filtered = filtered.filter(video => 
+                    (video.title && video.title.toLowerCase().includes(query)) ||
+                    (video.uploader && video.uploader.toLowerCase().includes(query))
+                );
+            }
+            
+            // Apply uploader filter
+            if (this.filters.uploader.trim()) {
+                const uploaderQuery = this.filters.uploader.toLowerCase();
+                filtered = filtered.filter(video => 
+                    video.uploader && video.uploader.toLowerCase().includes(uploaderQuery)
+                );
+            }
+            
+            // Apply duration filters (convert minutes to seconds)
+            if (this.filters.minDuration) {
+                const minSeconds = parseInt(this.filters.minDuration) * 60;
+                filtered = filtered.filter(video => video.duration >= minSeconds);
+            }
+            
+            if (this.filters.maxDuration) {
+                const maxSeconds = parseInt(this.filters.maxDuration) * 60;
+                filtered = filtered.filter(video => video.duration <= maxSeconds);
+            }
+            
+            // Apply date filters
+            if (this.filters.startDate) {
+                const startDate = new Date(this.filters.startDate);
+                filtered = filtered.filter(video => {
+                    if (!video.processed_date) return false;
+                    const videoDate = new Date(video.processed_date);
+                    return videoDate >= startDate;
+                });
+            }
+            
+            if (this.filters.endDate) {
+                const endDate = new Date(this.filters.endDate);
+                endDate.setHours(23, 59, 59, 999); // End of day
+                filtered = filtered.filter(video => {
+                    if (!video.processed_date) return false;
+                    const videoDate = new Date(video.processed_date);
+                    return videoDate <= endDate;
+                });
+            }
+            
+            // Apply sorting
+            this.sortVideos(filtered);
+            
+            this.filteredVideos = filtered;
+            this.currentPage = 1; // Reset to first page
+            this.updatePagination();
+        },
+        
+        sortVideos(videos) {
+            videos.sort((a, b) => {
+                let aValue, bValue;
+                
+                switch (this.sortBy) {
+                    case 'alphabetical':
+                        aValue = (a.title || '').toLowerCase();
+                        bValue = (b.title || '').toLowerCase();
+                        break;
+                    case 'duration':
+                        aValue = a.duration || 0;
+                        bValue = b.duration || 0;
+                        break;
+                    case 'date':
+                    default:
+                        aValue = a.processed_date ? new Date(a.processed_date) : new Date(0);
+                        bValue = b.processed_date ? new Date(b.processed_date) : new Date(0);
+                        break;
+                }
+                
+                if (this.sortOrder === 'asc') {
+                    return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
+                } else {
+                    return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
+                }
+            });
+        },
+        
+        updatePagination() {
+            const start = (this.currentPage - 1) * this.videosPerPage;
+            const end = start + this.videosPerPage;
+            this.paginatedVideos = this.filteredVideos.slice(start, end);
+        },
+        
+        changePage(page) {
+            if (page >= 1 && page <= this.totalPages) {
+                this.currentPage = page;
+                this.updatePagination();
+                
+                // Scroll to top of video grid
+                document.getElementById('videoGrid')?.scrollIntoView({ behavior: 'smooth' });
+            }
+        },
+        
+        get totalPages() {
+            return Math.ceil(this.filteredVideos.length / this.videosPerPage);
+        },
+        
+        getPageNumbers() {
+            const total = this.totalPages;
+            const current = this.currentPage;
+            const pages = [];
+            
+            if (total <= 7) {
+                // Show all pages if 7 or fewer
+                for (let i = 1; i <= total; i++) {
+                    pages.push(i);
+                }
+            } else {
+                // Show ellipsis logic for more than 7 pages
+                if (current <= 4) {
+                    for (let i = 1; i <= 5; i++) pages.push(i);
+                    pages.push('...');
+                    pages.push(total);
+                } else if (current >= total - 3) {
+                    pages.push(1);
+                    pages.push('...');
+                    for (let i = total - 4; i <= total; i++) pages.push(i);
+                } else {
+                    pages.push(1);
+                    pages.push('...');
+                    for (let i = current - 1; i <= current + 1; i++) pages.push(i);
+                    pages.push('...');
+                    pages.push(total);
+                }
+            }
+            
+            return pages.filter(page => page !== '...' || pages.indexOf(page) === pages.lastIndexOf(page));
+        },
+        
+        toggleFilters() {
+            this.showFilters = !this.showFilters;
+        },
+        
+        clearAllFilters() {
+            this.searchQuery = '';
+            this.filters = {
+                uploader: '',
+                minDuration: '',
+                maxDuration: '',
+                startDate: '',
+                endDate: ''
+            };
+            this.applyFilters();
+        },
+        
+        getActiveFilterCount() {
+            let count = 0;
+            
+            if (this.searchQuery.trim()) count++;
+            if (this.filters.uploader.trim()) count++;
+            if (this.filters.minDuration) count++;
+            if (this.filters.maxDuration) count++;
+            if (this.filters.startDate) count++;
+            if (this.filters.endDate) count++;
+            
+            return count;
+        },
+        
+        formatDuration(seconds) {
+            if (!seconds || seconds < 0) return '0:00';
+            
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = seconds % 60;
+            
+            if (hours > 0) {
+                return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            }
+            
+            return `${minutes}:${secs.toString().padStart(2, '0')}`;
+        },
+        
+        formatDate(dateString) {
+            if (!dateString) return 'Unknown';
+            
+            try {
+                const date = new Date(dateString);
+                return date.toLocaleDateString();
+            } catch (e) {
+                return 'Invalid date';
+            }
+        },
+        
+        debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
         }
-    });
-});
+    };
+}
 </script>
 
 <style>

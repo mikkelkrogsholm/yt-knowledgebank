@@ -157,6 +157,86 @@
                 <p class="text-xs text-gray-500">Model configuration is optimized for GPT-5 nano/mini/full models with intelligent cost routing. Advanced settings can be modified in the application code.</p>
             </div>
         </div>
+        
+        <!-- AI Prompt Configuration Section -->
+        <div class="bg-purple-50 rounded-lg p-6 mb-8">
+            <h3 class="text-lg font-semibold text-gray-800 mb-4">AI Prompt Configuration</h3>
+            
+            <div class="mb-4 text-sm text-gray-600">
+                <p>Customize AI prompts to improve the quality and focus of generated content. Changes take effect immediately for new content generation.</p>
+            </div>
+            
+            <form id="promptConfigForm" class="space-y-6">
+                <!-- Summarization Prompts -->
+                <div class="bg-white rounded-lg p-4 border">
+                    <h4 class="text-md font-medium text-gray-700 mb-3 flex items-center gap-2">
+                        <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                        Summarization Prompts
+                    </h4>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-600 mb-1">Video Summary Prompt</label>
+                            <textarea 
+                                name="summarization_video" 
+                                rows="3"
+                                class="w-full px-3 py-2 text-xs border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-transparent font-mono"
+                                placeholder="Prompt for generating video summaries..."
+                            ></textarea>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-600 mb-1">Actionable Items Prompt</label>
+                            <textarea 
+                                name="summarization_actionable" 
+                                rows="3"
+                                class="w-full px-3 py-2 text-xs border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-transparent font-mono"
+                                placeholder="Prompt for extracting actionable advice..."
+                            ></textarea>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Topic Modeling Prompt -->
+                <div class="bg-white rounded-lg p-4 border">
+                    <h4 class="text-md font-medium text-gray-700 mb-3 flex items-center gap-2">
+                        <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path>
+                        </svg>
+                        Topic Modeling Prompt
+                    </h4>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 mb-1">Topic Extraction Prompt</label>
+                        <textarea 
+                            name="topic_modeling" 
+                            rows="4"
+                            class="w-full px-3 py-2 text-xs border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-transparent font-mono"
+                            placeholder="Prompt for identifying topics..."
+                        ></textarea>
+                    </div>
+                </div>
+                
+                <div class="flex gap-3">
+                    <button 
+                        type="submit" 
+                        id="savePromptsBtn"
+                        class="flex-1 bg-purple-600 text-white py-3 px-6 rounded-lg font-medium hover:bg-purple-700 transition-all transform hover:scale-[1.02] focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
+                    >
+                        Save Prompts
+                    </button>
+                    <button 
+                        type="button" 
+                        onclick="resetToDefaults()"
+                        class="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-all"
+                    >
+                        Reset to Defaults
+                    </button>
+                </div>
+            </form>
+        </div>
         {% endif %}
 
         <div class="mt-8 p-4 bg-gray-50 rounded-lg">
@@ -171,4 +251,165 @@
         </div>
     </div>
 </div>
+
+<script>
+// Load and populate AI prompts when page loads
+document.addEventListener('DOMContentLoaded', async function() {
+    await loadAIPrompts();
+});
+
+async function loadAIPrompts() {
+    try {
+        const response = await fetch('/api/settings/ai-prompts');
+        if (response.ok) {
+            const prompts = await response.json();
+            populatePromptForm(prompts);
+        }
+    } catch (error) {
+        console.error('Failed to load AI prompts:', error);
+    }
+}
+
+function populatePromptForm(prompts) {
+    const form = document.getElementById('promptConfigForm');
+    if (!form) return;
+    
+    // Set summarization prompts
+    if (prompts.summarization) {
+        if (prompts.summarization.video) {
+            form.querySelector('[name="summarization_video"]').value = prompts.summarization.video;
+        }
+        if (prompts.summarization.actionable) {
+            form.querySelector('[name="summarization_actionable"]').value = prompts.summarization.actionable;
+        }
+    }
+    
+    // Set topic modeling prompt
+    if (prompts.topic_modeling) {
+        form.querySelector('[name="topic_modeling"]').value = prompts.topic_modeling;
+    }
+}
+
+// Handle prompt form submission
+document.getElementById('promptConfigForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const saveBtn = document.getElementById('savePromptsBtn');
+    const originalText = saveBtn.textContent;
+    
+    // Show loading state
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = `
+        <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white inline" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        Saving...
+    `;
+    
+    try {
+        const formData = new FormData(this);
+        
+        // Build prompts object
+        const prompts = {
+            summarization: {
+                video: formData.get('summarization_video'),
+                actionable: formData.get('summarization_actionable'),
+                entity: "Create a summary focused specifically on what was said about '{focus}'. Include any mentions, discussions, quotes, or references to this entity. Return JSON with:\n{\n  \"summary\": \"entity-focused summary text\",\n  \"key_insights\": [\"insight1\", \"insight2\"],\n  \"actionable_items\": [\"action1\", \"action2\"]\n}",
+                topic: "Create a summary focused specifically on the topic of '{focus}'. Extract all relevant information, strategies, and insights related to this topic. Return JSON with:\n{\n  \"summary\": \"topic-focused summary text\",\n  \"key_insights\": [\"insight1\", \"insight2\"],\n  \"actionable_items\": [\"action1\", \"action2\"]\n}"
+            },
+            topic_modeling: formData.get('topic_modeling')
+        };
+        
+        const response = await fetch('/api/settings/ai-prompts', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(prompts)
+        });
+        
+        if (response.ok) {
+            showNotification('AI prompts saved successfully!', 'success');
+        } else {
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to save prompts');
+        }
+        
+    } catch (error) {
+        console.error('Save failed:', error);
+        showNotification(`Failed to save prompts: ${error.message}`, 'error');
+        
+    } finally {
+        // Reset button
+        saveBtn.disabled = false;
+        saveBtn.textContent = originalText;
+    }
+});
+
+async function resetToDefaults() {
+    if (!confirm('This will reset all prompts to their default values. Continue?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/settings/ai-prompts/defaults');
+        if (response.ok) {
+            const defaults = await response.json();
+            populatePromptForm(defaults);
+            showNotification('Prompts reset to defaults', 'success');
+        } else {
+            throw new Error('Failed to get default prompts');
+        }
+    } catch (error) {
+        console.error('Reset failed:', error);
+        showNotification(`Failed to reset prompts: ${error.message}`, 'error');
+    }
+}
+
+function showNotification(message, type = 'success') {
+    // Remove existing notifications
+    const existing = document.querySelectorAll('.notification');
+    existing.forEach(n => n.remove());
+    
+    const notification = document.createElement('div');
+    notification.className = 'notification fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50 max-w-sm';
+    
+    if (type === 'success') {
+        notification.className += ' bg-green-50 border border-green-200 text-green-800';
+        notification.innerHTML = `
+            <div class="flex items-start gap-3">
+                <svg class="w-5 h-5 text-green-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+                <div>
+                    <p class="font-medium">Success</p>
+                    <p class="text-sm">${message}</p>
+                </div>
+            </div>
+        `;
+    } else {
+        notification.className += ' bg-red-50 border border-red-200 text-red-800';
+        notification.innerHTML = `
+            <div class="flex items-start gap-3">
+                <svg class="w-5 h-5 text-red-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+                <div>
+                    <p class="font-medium">Error</p>
+                    <p class="text-sm">${message}</p>
+                </div>
+            </div>
+        `;
+    }
+    
+    document.body.appendChild(notification);
+    
+    // Remove after 5 seconds
+    setTimeout(() => {
+        notification.remove();
+    }, 5000);
+}
+</script>
+
 {% endblock %}

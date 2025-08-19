@@ -26,6 +26,11 @@ class SearchRequest(BaseModel):
     speaker_id: Optional[str] = None
     start_date: Optional[str] = None  # ISO format string
     end_date: Optional[str] = None    # ISO format string
+    min_duration: Optional[int] = None  # Video minimum duration in seconds
+    max_duration: Optional[int] = None  # Video maximum duration in seconds
+    uploader: Optional[str] = None      # Filter by channel/uploader
+    sort_by: Optional[str] = "relevance"  # relevance, date, duration, alphabetical
+    sort_order: Optional[str] = "desc"    # desc, asc
     limit: int = 50
     offset: int = 0
 
@@ -391,6 +396,61 @@ async def video_detail(request: Request, task_id: str):
             "message": f"Error loading video: {str(e)}"
         }, status_code=500)
 
+@app.delete("/api/video/{video_id}")
+async def delete_video(video_id: str, confirm: bool = False):
+    """
+    Delete a video and all associated data.
+    
+    Requires confirmation parameter to prevent accidental deletion.
+    Performs cascade deletion of all related data and cleans up files.
+    """
+    if not confirm:
+        return JSONResponse(
+            {"error": "Confirmation required. Add ?confirm=true to delete."},
+            status_code=400
+        )
+    
+    try:
+        from app.database_queries import delete_video_cascade
+        from app.processor import delete_video_files
+        import logging
+        
+        logger = logging.getLogger(__name__)
+        logger.info(f"Starting deletion of video {video_id}")
+        
+        # Check if video exists
+        result = get_task_result(video_id)
+        if not result.get('metadata'):
+            return JSONResponse(
+                {"error": f"Video {video_id} not found"},
+                status_code=404
+            )
+        
+        video_title = result.get('metadata', {}).get('title', 'Unknown')
+        
+        # Delete from database (cascade delete handles all related data)
+        deletion_stats = delete_video_cascade(video_id)
+        
+        # Delete associated files
+        files_deleted = delete_video_files(video_id)
+        
+        logger.info(f"Successfully deleted video {video_id}: {deletion_stats}")
+        
+        return JSONResponse({
+            "success": True,
+            "message": f"Video '{video_title}' deleted successfully",
+            "video_id": video_id,
+            "deletion_stats": deletion_stats,
+            "files_deleted": files_deleted
+        })
+        
+    except Exception as e:
+        logging.error(f"Error deleting video {video_id}: {str(e)}")
+        return JSONResponse(
+            {"error": f"Failed to delete video: {str(e)}"},
+            status_code=500
+        )
+
 @app.post("/api/search", response_model=SearchResponse)
 async def search_transcripts(search_request: SearchRequest):
     """
@@ -433,6 +493,11 @@ async def search_transcripts(search_request: SearchRequest):
             speaker_id=search_request.speaker_id,
             start_date=start_date,
             end_date=end_date,
+            min_duration=search_request.min_duration,
+            max_duration=search_request.max_duration,
+            uploader=search_request.uploader,
+            sort_by=search_request.sort_by,
+            sort_order=search_request.sort_order,
             limit=search_request.limit + 1,  # Get one extra to check if there are more results
             offset=search_request.offset
         )
@@ -482,6 +547,11 @@ async def search_transcripts_get(
     speaker_id: Optional[str] = Query(None, description="Filter by speaker ID"),
     start_date: Optional[str] = Query(None, description="Filter by start date (ISO format)"),
     end_date: Optional[str] = Query(None, description="Filter by end date (ISO format)"),
+    min_duration: Optional[int] = Query(None, ge=1, description="Filter by minimum video duration in seconds"),
+    max_duration: Optional[int] = Query(None, ge=1, description="Filter by maximum video duration in seconds"),
+    uploader: Optional[str] = Query(None, description="Filter by channel/uploader name"),
+    sort_by: str = Query("relevance", regex="^(relevance|date|duration|alphabetical)$", description="Sort criteria"),
+    sort_order: str = Query("desc", regex="^(desc|asc)$", description="Sort order"),
     limit: int = Query(50, ge=1, le=100, description="Number of results to return"),
     offset: int = Query(0, ge=0, description="Number of results to skip")
 ):
@@ -496,6 +566,11 @@ async def search_transcripts_get(
         speaker_id=speaker_id,
         start_date=start_date,
         end_date=end_date,
+        min_duration=min_duration,
+        max_duration=max_duration,
+        uploader=uploader,
+        sort_by=sort_by,
+        sort_order=sort_order,
         limit=limit,
         offset=offset
     )
@@ -512,6 +587,140 @@ async def search_stats():
     except Exception as e:
         return JSONResponse(
             {"error": f"Failed to get search stats: {str(e)}"},
+            status_code=500
+        )
+
+@app.get("/api/videos/filter")
+async def filter_videos(
+    query: Optional[str] = Query(None, description="Filter by title or uploader"),
+    uploader: Optional[str] = Query(None, description="Filter by channel/uploader name"),
+    min_duration: Optional[int] = Query(None, ge=1, description="Minimum duration in seconds"),
+    max_duration: Optional[int] = Query(None, ge=1, description="Maximum duration in seconds"),
+    start_date: Optional[str] = Query(None, description="Filter by videos processed after this date"),
+    end_date: Optional[str] = Query(None, description="Filter by videos processed before this date"),
+    sort_by: str = Query("date", regex="^(date|duration|alphabetical)$", description="Sort criteria"),
+    sort_order: str = Query("desc", regex="^(desc|asc)$", description="Sort order"),
+    limit: int = Query(50, ge=1, le=100, description="Number of results to return"),
+    offset: int = Query(0, ge=0, description="Number of results to skip")
+):
+    """
+    Filter and sort videos in the library with pagination.
+    
+    This endpoint filters the video library (not transcript search).
+    """
+    try:
+        from app.database import get_database_session, Video
+        from sqlalchemy import and_, or_, func
+        
+        # Parse date strings if provided
+        start_date_obj = None
+        end_date_obj = None
+        
+        if start_date:
+            try:
+                start_date_obj = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+            except ValueError:
+                return JSONResponse(
+                    {"error": "Invalid start_date format. Use ISO format (YYYY-MM-DDTHH:MM:SS)"},
+                    status_code=400
+                )
+        
+        if end_date:
+            try:
+                end_date_obj = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+            except ValueError:
+                return JSONResponse(
+                    {"error": "Invalid end_date format. Use ISO format (YYYY-MM-DDTHH:MM:SS)"},
+                    status_code=400
+                )
+        
+        session = get_database_session()
+        
+        try:
+            # Build base query
+            query_obj = session.query(Video)
+            
+            # Apply filters
+            conditions = []
+            
+            if query:
+                conditions.append(
+                    or_(
+                        Video.title.ilike(f"%{query}%"),
+                        Video.uploader.ilike(f"%{query}%")
+                    )
+                )
+            
+            if uploader:
+                conditions.append(Video.uploader.ilike(f"%{uploader}%"))
+            
+            if min_duration:
+                conditions.append(Video.duration >= min_duration)
+            
+            if max_duration:
+                conditions.append(Video.duration <= max_duration)
+            
+            if start_date_obj:
+                conditions.append(Video.processed_date >= start_date_obj)
+            
+            if end_date_obj:
+                conditions.append(Video.processed_date <= end_date_obj)
+            
+            if conditions:
+                query_obj = query_obj.filter(and_(*conditions))
+            
+            # Get total count before pagination
+            total_count = query_obj.count()
+            
+            # Apply sorting
+            if sort_by == "date":
+                if sort_order == "desc":
+                    query_obj = query_obj.order_by(Video.processed_date.desc())
+                else:
+                    query_obj = query_obj.order_by(Video.processed_date.asc())
+            elif sort_by == "duration":
+                if sort_order == "desc":
+                    query_obj = query_obj.order_by(Video.duration.desc())
+                else:
+                    query_obj = query_obj.order_by(Video.duration.asc())
+            elif sort_by == "alphabetical":
+                if sort_order == "desc":
+                    query_obj = query_obj.order_by(Video.title.desc())
+                else:
+                    query_obj = query_obj.order_by(Video.title.asc())
+            
+            # Apply pagination
+            videos = query_obj.offset(offset).limit(limit).all()
+            
+            # Convert to response format
+            video_list = []
+            for video in videos:
+                video_list.append({
+                    "id": video.id,
+                    "title": video.title,
+                    "duration": video.duration,
+                    "uploader": video.uploader,
+                    "url": video.url,
+                    "video_id": video.video_id,
+                    "processed_date": video.processed_date.isoformat() if video.processed_date else None
+                })
+            
+            has_more = (offset + len(videos)) < total_count
+            
+            return JSONResponse({
+                "videos": video_list,
+                "total_found": total_count,
+                "has_more": has_more,
+                "offset": offset,
+                "limit": limit
+            })
+            
+        finally:
+            session.close()
+            
+    except Exception as e:
+        return JSONResponse(
+            {"error": f"Video filter error: {str(e)}"},
             status_code=500
         )
 
@@ -931,6 +1140,224 @@ async def get_recent_videos(limit: int = Query(5, ge=1, le=20)):
     except Exception as e:
         return JSONResponse(
             {"error": f"Failed to get recent videos: {str(e)}"},
+            status_code=500
+        )
+
+# AI Content Generation Endpoints
+
+@app.post("/api/video/{video_id}/generate-summaries")
+async def generate_video_summaries(video_id: str):
+    """Generate AI-powered summaries for a video."""
+    try:
+        from app.database import get_database_session
+        from app.summarization import SummarizationPipeline
+        
+        session = get_database_session()
+        pipeline = SummarizationPipeline(session)
+        
+        # Generate video-level and actionable summaries
+        result = pipeline.process_video_summaries(video_id)
+        session.close()
+        
+        return JSONResponse(result)
+        
+    except ImportError:
+        return JSONResponse(
+            {"error": "AI summarization not available. Please configure OpenAI API key in settings."},
+            status_code=503
+        )
+    except Exception as e:
+        return JSONResponse(
+            {"error": f"Failed to generate summaries: {str(e)}"},
+            status_code=500
+        )
+
+@app.post("/api/video/{video_id}/generate-topics")
+async def generate_video_topics(video_id: str):
+    """Generate AI-powered topics for a video."""
+    try:
+        from app.database import get_database_session
+        from app.topic_modeling import TopicModelingPipeline
+        
+        session = get_database_session()
+        pipeline = TopicModelingPipeline(session)
+        
+        # Generate topics for the video
+        result = pipeline.process_video_topics(video_id)
+        session.close()
+        
+        return JSONResponse(result)
+        
+    except ImportError:
+        return JSONResponse(
+            {"error": "AI topic modeling not available. Please configure OpenAI API key in settings."},
+            status_code=503
+        )
+    except Exception as e:
+        return JSONResponse(
+            {"error": f"Failed to generate topics: {str(e)}"},
+            status_code=500
+        )
+
+@app.post("/api/video/{video_id}/generate-all")
+async def generate_all_ai_content(video_id: str):
+    """Generate all AI-powered content for a video (summaries, topics, etc.)."""
+    try:
+        from app.database import get_database_session
+        from app.summarization import SummarizationPipeline
+        from app.topic_modeling import TopicModelingPipeline
+        
+        session = get_database_session()
+        
+        # Initialize pipelines
+        summary_pipeline = SummarizationPipeline(session)
+        topic_pipeline = TopicModelingPipeline(session)
+        
+        results = {
+            "video_id": video_id,
+            "summaries": {},
+            "topics": {},
+            "status": "success",
+            "errors": []
+        }
+        
+        # Generate summaries
+        try:
+            summary_result = summary_pipeline.process_video_summaries(video_id)
+            results["summaries"] = summary_result
+        except Exception as e:
+            results["errors"].append(f"Summary generation failed: {str(e)}")
+        
+        # Generate topics
+        try:
+            topic_result = topic_pipeline.process_video_topics(video_id)
+            results["topics"] = topic_result
+        except Exception as e:
+            results["errors"].append(f"Topic generation failed: {str(e)}")
+        
+        session.close()
+        
+        # Set overall status based on errors
+        if results["errors"]:
+            results["status"] = "partial" if (results["summaries"] or results["topics"]) else "error"
+        
+        return JSONResponse(results)
+        
+    except ImportError:
+        return JSONResponse(
+            {"error": "AI content generation not available. Please configure OpenAI API key in settings."},
+            status_code=503
+        )
+    except Exception as e:
+        return JSONResponse(
+            {"error": f"Failed to generate AI content: {str(e)}"},
+            status_code=500
+        )
+
+@app.get("/api/video/{video_id}/ai-content")
+async def get_ai_content(video_id: str):
+    """Get existing AI-generated content for a video."""
+    try:
+        from app.database import get_database_session, Summary, VideoTopic, Topic
+        from sqlalchemy.orm import sessionmaker
+        
+        session = get_database_session()
+        
+        # Get summaries
+        summaries = session.query(Summary).filter(Summary.video_id == video_id).all()
+        summary_data = []
+        for summary in summaries:
+            import json
+            content = json.loads(summary.content) if summary.content else {}
+            summary_data.append({
+                "id": summary.id,
+                "type": summary.summary_type,
+                "content": content,
+                "generated_at": summary.generated_at.isoformat(),
+                "entity_id": summary.entity_id,
+                "topic_id": summary.topic_id
+            })
+        
+        # Get topics
+        video_topics = session.query(VideoTopic).join(Topic).filter(
+            VideoTopic.video_id == video_id
+        ).all()
+        
+        topic_data = []
+        for vt in video_topics:
+            topic_data.append({
+                "id": vt.topic.id,
+                "name": vt.topic.name,
+                "description": vt.topic.description,
+                "relevance_score": vt.relevance_score,
+                "created_at": vt.created_at.isoformat()
+            })
+        
+        session.close()
+        
+        return JSONResponse({
+            "video_id": video_id,
+            "summaries": summary_data,
+            "topics": topic_data,
+            "has_content": len(summary_data) > 0 or len(topic_data) > 0
+        })
+        
+    except ImportError:
+        return JSONResponse({
+            "video_id": video_id,
+            "summaries": [],
+            "topics": [],
+            "has_content": False,
+            "message": "Database models not available"
+        })
+    except Exception as e:
+        return JSONResponse(
+            {"error": f"Failed to get AI content: {str(e)}"},
+            status_code=500
+        )
+
+# AI Settings Endpoints
+
+@app.get("/api/settings/ai-prompts")
+async def get_ai_prompts():
+    """Get current AI prompt templates."""
+    try:
+        from app.settings import get_ai_prompts
+        prompts = get_ai_prompts()
+        return JSONResponse(prompts)
+    except Exception as e:
+        return JSONResponse(
+            {"error": f"Failed to get AI prompts: {str(e)}"},
+            status_code=500
+        )
+
+@app.post("/api/settings/ai-prompts")
+async def save_ai_prompts(request: Request):
+    """Save AI prompt templates."""
+    try:
+        from app.settings import save_ai_prompts
+        
+        prompts = await request.json()
+        save_ai_prompts(prompts)
+        
+        return JSONResponse({"message": "AI prompts saved successfully"})
+        
+    except Exception as e:
+        return JSONResponse(
+            {"error": f"Failed to save AI prompts: {str(e)}"},
+            status_code=500
+        )
+
+@app.get("/api/settings/ai-prompts/defaults")
+async def get_default_ai_prompts():
+    """Get default AI prompt templates."""
+    try:
+        from app.settings import get_default_ai_prompts
+        defaults = get_default_ai_prompts()
+        return JSONResponse(defaults)
+    except Exception as e:
+        return JSONResponse(
+            {"error": f"Failed to get default AI prompts: {str(e)}"},
             status_code=500
         )
 

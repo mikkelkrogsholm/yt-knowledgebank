@@ -362,3 +362,66 @@ def get_all_videos_from_files() -> List[Dict[str, Any]]:
     # Sort by processed date (most recent first)
     return sorted(videos, key=lambda x: x.get('processed_date', ''), reverse=True)
 
+
+def delete_video_files(task_id: str) -> Dict[str, Any]:
+    """
+    Delete all files associated with a video task.
+    
+    Args:
+        task_id: The task ID of the video to delete
+        
+    Returns:
+        Dictionary with deletion statistics and results
+    """
+    task_dir = f"/app/data/videos/{task_id}"
+    
+    stats = {
+        'task_id': task_id,
+        'directory_existed': False,
+        'files_deleted': 0,
+        'bytes_freed': 0,
+        'files_list': [],
+        'errors': []
+    }
+    
+    try:
+        # Check if directory exists
+        if not os.path.exists(task_dir):
+            logger.info(f"Video directory {task_dir} does not exist")
+            return stats
+            
+        stats['directory_existed'] = True
+        
+        # Get list of files before deletion for stats
+        for root, dirs, files in os.walk(task_dir):
+            for file in files:
+                file_path = os.path.join(root, file)
+                try:
+                    file_size = os.path.getsize(file_path)
+                    stats['files_list'].append({
+                        'name': file,
+                        'path': file_path,
+                        'size_bytes': file_size
+                    })
+                    stats['bytes_freed'] += file_size
+                    stats['files_deleted'] += 1
+                except OSError as e:
+                    stats['errors'].append(f"Error getting size for {file_path}: {str(e)}")
+        
+        # Delete the entire directory and all contents
+        import shutil
+        shutil.rmtree(task_dir)
+        
+        logger.info(f"Successfully deleted video directory {task_dir} - "
+                   f"freed {stats['bytes_freed']} bytes, deleted {stats['files_deleted']} files")
+        
+        stats['success'] = True
+        return stats
+        
+    except Exception as e:
+        error_msg = f"Error deleting video files for {task_id}: {str(e)}"
+        logger.error(error_msg)
+        stats['errors'].append(error_msg)
+        stats['success'] = False
+        return stats
+

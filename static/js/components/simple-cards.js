@@ -83,7 +83,12 @@ function recentVideosCard() {
                     limit: 5
                 });
                 
-                this.videos = response.videos || [];
+                this.videos = (response.videos || []).map(video => ({
+                    id: video.id || video.task_id || 'unknown',
+                    title: video.title || 'Untitled Video',
+                    created_at: video.created_at || video.processed_date || new Date().toISOString(),
+                    ...video
+                }));
             } catch (error) {
                 console.error('Failed to load recent videos:', error);
                 this.error = 'Failed to load videos';

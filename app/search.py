@@ -105,10 +105,15 @@ class SearchManager:
                speaker_id: Optional[str] = None,
                start_date: Optional[datetime] = None,
                end_date: Optional[datetime] = None,
+               min_duration: Optional[int] = None,
+               max_duration: Optional[int] = None,
+               uploader: Optional[str] = None,
+               sort_by: str = "relevance",
+               sort_order: str = "desc",
                limit: int = 50,
                offset: int = 0) -> List[SearchResult]:
         """
-        Perform full-text search with optional filters.
+        Perform full-text search with optional filters and sorting.
         
         Args:
             query: Search query (supports FTS5 syntax)
@@ -116,6 +121,11 @@ class SearchManager:
             speaker_id: Filter by specific speaker
             start_date: Filter by videos processed after this date
             end_date: Filter by videos processed before this date
+            min_duration: Filter by minimum video duration in seconds
+            max_duration: Filter by maximum video duration in seconds
+            uploader: Filter by channel/uploader name (partial match)
+            sort_by: Sort criteria - "relevance", "date", "duration", "alphabetical"
+            sort_order: Sort order - "desc" or "asc"
             limit: Maximum number of results
             offset: Number of results to skip
             
@@ -132,9 +142,10 @@ class SearchManager:
             # Build the base FTS query
             fts_query = self._build_fts_query(query)
             
-            # Build the full SQL with filters
+            # Build the full SQL with filters and sorting
             sql, params = self._build_search_sql(
-                fts_query, video_id, speaker_id, start_date, end_date, limit, offset
+                fts_query, video_id, speaker_id, start_date, end_date, 
+                min_duration, max_duration, uploader, sort_by, sort_order, limit, offset
             )
             
             cursor.execute(sql, params)
@@ -202,9 +213,14 @@ class SearchManager:
                          speaker_id: Optional[str],
                          start_date: Optional[datetime],
                          end_date: Optional[datetime],
+                         min_duration: Optional[int],
+                         max_duration: Optional[int],
+                         uploader: Optional[str],
+                         sort_by: str,
+                         sort_order: str,
                          limit: int,
                          offset: int) -> tuple:
-        """Build the complete search SQL with filters."""
+        """Build the complete search SQL with filters and sorting."""
         
         sql = """
             SELECT 
@@ -216,7 +232,10 @@ class SearchManager:
                 tc.text,
                 rank,
                 tc.word_count,
-                v.title as video_title
+                v.title as video_title,
+                v.duration,
+                v.uploader,
+                v.processed_date
             FROM transcript_chunks_fts
             JOIN transcript_chunks tc ON tc.id = transcript_chunks_fts.rowid
             JOIN videos v ON v.id = tc.video_id
@@ -242,17 +261,43 @@ class SearchManager:
             where_conditions.append("v.processed_date <= ?")
             params.append(end_date.isoformat())
         
+        if min_duration:
+            where_conditions.append("v.duration >= ?")
+            params.append(min_duration)
+        
+        if max_duration:
+            where_conditions.append("v.duration <= ?")
+            params.append(max_duration)
+        
+        if uploader:
+            where_conditions.append("v.uploader LIKE ?")
+            params.append(f"%{uploader}%")
+        
         if where_conditions:
             sql += " WHERE " + " AND ".join(where_conditions)
         
-        # Order by rank (BM25 score - in FTS5, higher/less negative is better)
-        sql += " ORDER BY rank DESC"
+        # Build ORDER BY clause
+        order_clause = self._build_order_clause(sort_by, sort_order)
+        sql += f" ORDER BY {order_clause}"
         
         # Add pagination
         sql += " LIMIT ? OFFSET ?"
         params.extend([limit, offset])
         
         return sql, params
+    
+    def _build_order_clause(self, sort_by: str, sort_order: str) -> str:
+        """Build ORDER BY clause based on sort criteria."""
+        direction = "DESC" if sort_order.upper() == "DESC" else "ASC"
+        
+        sort_mapping = {
+            "relevance": "rank DESC",  # FTS5 rank (higher/less negative is better)
+            "date": f"v.processed_date {direction}",
+            "duration": f"v.duration {direction}",
+            "alphabetical": f"v.title {direction}"
+        }
+        
+        return sort_mapping.get(sort_by, "rank DESC")
     
     def _highlight_text(self, text: str, query: str) -> str:
         """

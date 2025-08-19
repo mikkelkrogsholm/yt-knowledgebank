@@ -106,6 +106,15 @@
                     </h1>
                 </div>
                 
+                <!-- Processing Status Indicator -->
+                <div x-data="navProcessingIndicator()" 
+                     x-show="isProcessing" 
+                     x-transition:enter="fade-in"
+                     class="flex items-center space-x-2 text-blue-600 dark:text-blue-400">
+                    <div class="w-3 h-3 border-2 border-blue-300 border-t-blue-600 rounded-full animate-spin"></div>
+                    <span class="text-sm font-medium">Processing...</span>
+                </div>
+                
                 <!-- Navigation Links -->
                 <div class="hidden md:flex items-center space-x-6">
                     <a href="/" 
@@ -216,7 +225,7 @@
                         <div x-show="isOpen" 
                              x-transition:enter="slide-in"
                              class="search-suggestions">
-                            <template x-for="(suggestion, index) in suggestions" :key="suggestion.id">
+                            <template x-for="(suggestion, index) in suggestions" :key="'suggestion_' + index">
                                 <button @click="selectSuggestion(suggestion)"
                                         class="search-suggestion"
                                         :class="{ 'selected': selectedIndex === index }">
@@ -225,7 +234,7 @@
                                     <div class="search-suggestion-meta">
                                         <span x-text="formatTime(suggestion.start_ms)"></span>
                                         <span class="mx-2">•</span>
-                                        <span x-text="Math.round(suggestion.rank * 100) + '% match'"></span>
+                                        <span x-text="formatRelevanceScore(suggestion.rank) + '% match'"></span>
                                     </div>
                                 </button>
                             </template>
@@ -304,7 +313,9 @@
     <script src="/static/js/components/loading-spinner.js"></script>
     <script src="/static/js/components/error-boundary.js"></script>
     <script src="/static/js/components/simple-search-bar.js"></script>
+    <script src="/static/js/components/advanced-search-bar.js"></script>
     <script src="/static/js/components/simple-cards.js"></script>
+    <script src="/static/js/components/processing-status-card.js"></script>
     
     <!-- Initialize global components -->
     <script>
@@ -373,6 +384,32 @@
                         setTimeout(() => {
                             this.notifications.splice(index, 1);
                         }, 300);
+                    }
+                }
+            };
+        }
+        
+        // Navigation processing indicator
+        function navProcessingIndicator() {
+            return {
+                isProcessing: false,
+                
+                init() {
+                    this.checkProcessingStatus();
+                    // Poll for updates every 3 seconds
+                    setInterval(() => {
+                        this.checkProcessingStatus();
+                    }, 3000);
+                },
+                
+                async checkProcessingStatus() {
+                    try {
+                        const response = await fetch('/api/dashboard/processing');
+                        const data = await response.json();
+                        this.isProcessing = data.in_progress > 0;
+                    } catch (error) {
+                        console.warn('Failed to check processing status in nav:', error);
+                        // Keep current state on error to avoid flickering
                     }
                 }
             };

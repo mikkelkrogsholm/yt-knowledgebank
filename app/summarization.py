@@ -17,7 +17,7 @@ import openai
 from sqlalchemy.orm import Session
 
 from app.database import Summary, Video, Entity, Topic, TranscriptChunk
-from app.settings import get_openai_api_key, get_model_config
+from app.settings import get_openai_api_key, get_model_config, get_ai_prompts
 
 
 @dataclass
@@ -104,7 +104,36 @@ class SummaryGenerator:
             )
     
     def _build_summary_prompt(self, text: str, summary_type: str, focus: str = None) -> str:
-        """Build the summarization prompt based on type and focus."""
+        """Build the summarization prompt based on type and focus using customizable prompts."""
+        try:
+            # Get custom prompts from settings
+            prompts = get_ai_prompts()
+            
+            if summary_type == "video":
+                template = prompts.get("summarization", {}).get("video", "")
+            elif summary_type == "actionable":
+                template = prompts.get("summarization", {}).get("actionable", "")
+            elif summary_type == "entity":
+                template = prompts.get("summarization", {}).get("entity", "")
+            elif summary_type == "topic":
+                template = prompts.get("summarization", {}).get("topic", "")
+            else:
+                template = "Create a comprehensive summary of this transcript content."
+            
+            # Replace focus placeholder if present
+            if focus and "{focus}" in template:
+                template = template.replace("{focus}", focus)
+            
+            # Append the text to analyze
+            return f"{template}\n\nText to summarize:\n{text}"
+            
+        except Exception as e:
+            # Fallback to default behavior if settings fail
+            print(f"Error getting custom prompts, using defaults: {e}")
+            return self._build_default_prompt(text, summary_type, focus)
+    
+    def _build_default_prompt(self, text: str, summary_type: str, focus: str = None) -> str:
+        """Fallback method with default prompts."""
         base_format = """Return JSON with:
 {
   "summary": "concise summary text",
@@ -114,16 +143,12 @@ class SummaryGenerator:
         
         if summary_type == "video":
             instruction = "Create a concise summary of the key insights from this transcript. Focus on main ideas, concepts, important facts, and novel perspectives."
-        
         elif summary_type == "entity" and focus:
             instruction = f"Create a summary focused specifically on what was said about '{focus}'. Include any mentions, discussions, quotes, or references to this entity."
-        
         elif summary_type == "topic" and focus:
             instruction = f"Create a summary focused specifically on the topic of '{focus}'. Extract all relevant information, strategies, and insights related to this topic."
-        
         elif summary_type == "actionable":
             instruction = "Extract concrete, actionable advice and recommendations from this transcript. Focus on specific steps, strategies, and practical recommendations that viewers can implement."
-        
         else:
             instruction = "Create a comprehensive summary of this transcript content."
         

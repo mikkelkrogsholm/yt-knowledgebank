@@ -280,7 +280,7 @@ function askAnythingBar() {
             topResults.forEach(result => {
                 html += `<li class="border-l-2 border-primary-200 pl-3">
                     <div class="text-sm">${result.highlighted_text || result.text}</div>
-                    <div class="text-xs text-gray-500">Score: ${Math.round(result.rank * 100)}%</div>
+                    <div class="text-xs text-gray-500">Score: ${this.formatRelevanceScore(result.rank)}%</div>
                 </li>`;
             });
             
@@ -326,6 +326,24 @@ function askAnythingBar() {
             } else {
                 return `${minutes}:${String(seconds % 60).padStart(2, '0')}`;
             }
+        },
+        
+        formatRelevanceScore(rank) {
+            // Convert FTS5 BM25 rank (negative value, closer to 0 = better match) 
+            // to positive percentage (higher = better match)
+            // FTS5 ranks typically range from 0 to -5 or lower
+            
+            if (!rank || rank === 0) return 100;
+            
+            // Since rank is negative, we need to convert it to a positive scale
+            // Better matches have ranks closer to 0 (like -0.001)
+            // Worse matches have more negative ranks (like -4.5)
+            
+            // Use exponential decay to convert negative rank to percentage
+            // This ensures better matches (closer to 0) get higher percentages
+            const normalizedScore = Math.max(0, Math.min(100, Math.exp(rank) * 100));
+            
+            return Math.round(normalizedScore);
         },
         
         jumpToVideo(videoId, startMs) {

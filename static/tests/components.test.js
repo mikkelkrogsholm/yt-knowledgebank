@@ -280,6 +280,130 @@ componentTest.test('ErrorBoundary component user-friendly messages', () => {
     });
 });
 
+// Test ErrorBoundary null/undefined error handling - Issue #11 fixes
+componentTest.test('ErrorBoundary handles null errors gracefully', () => {
+    const component = errorBoundary();
+    
+    // Test null error
+    component.handleError(null, 'Test context');
+    componentTest.assertEqual(component.hasError, false, 'Should not set hasError for null error');
+    componentTest.assertEqual(component.error, null, 'Should not store null error');
+    
+    // Test undefined error
+    component.handleError(undefined, 'Test context');
+    componentTest.assertEqual(component.hasError, false, 'Should not set hasError for undefined error');
+    componentTest.assertEqual(component.error, null, 'Should not store undefined error');
+});
+
+componentTest.test('ErrorBoundary handles empty string errors gracefully', () => {
+    const component = errorBoundary();
+    
+    // Test empty string
+    component.handleError('', 'Test context');
+    componentTest.assertEqual(component.hasError, false, 'Should not set hasError for empty string error');
+    
+    // Test whitespace-only string
+    component.handleError('   ', 'Test context');
+    componentTest.assertEqual(component.hasError, false, 'Should not set hasError for whitespace-only error');
+});
+
+componentTest.test('ErrorBoundary handles malformed error objects safely', () => {
+    const component = errorBoundary();
+    
+    // Test object without message property
+    const objectError = { someProperty: 'value' };
+    component.handleError(objectError, 'Test context');
+    componentTest.assertEqual(component.hasError, true, 'Should handle object error');
+    componentTest.assert(component.error instanceof Error, 'Should convert object to Error');
+    
+    // Test array as error
+    const arrayError = ['error', 'array'];
+    component.handleError(arrayError, 'Test context');
+    componentTest.assertEqual(component.hasError, true, 'Should handle array error');
+    componentTest.assert(component.error instanceof Error, 'Should convert array to Error');
+});
+
+componentTest.test('ErrorBoundary getSafeErrorMessage handles null errors', () => {
+    const component = errorBoundary();
+    
+    // Test with no error set
+    const message1 = component.getSafeErrorMessage();
+    componentTest.assertEqual(message1, '', 'Should return empty string when no error');
+    
+    // Set null error directly and test
+    component.error = null;
+    component.errorMessage = null;
+    const message2 = component.getSafeErrorMessage();
+    componentTest.assertEqual(message2, '', 'Should return empty string for null error');
+    
+    // Test with valid error
+    component.error = new Error('Test error');
+    component.errorMessage = 'Test error';
+    const message3 = component.getSafeErrorMessage();
+    componentTest.assertEqual(message3, 'Test error', 'Should return valid error message');
+});
+
+componentTest.test('ErrorBoundary getErrorMessage utility handles various inputs', () => {
+    const component = errorBoundary();
+    
+    // Test null/undefined
+    componentTest.assertEqual(component.getErrorMessage(null), '', 'Should return empty string for null');
+    componentTest.assertEqual(component.getErrorMessage(undefined), '', 'Should return empty string for undefined');
+    
+    // Test string inputs
+    componentTest.assertEqual(component.getErrorMessage('test error'), 'test error', 'Should return string as-is');
+    componentTest.assertEqual(component.getErrorMessage(''), '', 'Should return empty string as-is');
+    
+    // Test Error objects
+    const error = new Error('Test message');
+    componentTest.assertEqual(component.getErrorMessage(error), 'Test message', 'Should extract message from Error');
+    
+    // Test objects with message property
+    const objectWithMessage = { message: 'Object message' };
+    componentTest.assertEqual(component.getErrorMessage(objectWithMessage), 'Object message', 'Should extract message from object');
+});
+
+componentTest.test('ErrorBoundary safeStringify handles various inputs safely', () => {
+    const component = errorBoundary();
+    
+    // Test null/undefined
+    componentTest.assertEqual(component.safeStringify(null), 'null', 'Should convert null to string');
+    componentTest.assertEqual(component.safeStringify(undefined), 'undefined', 'Should convert undefined to string');
+    
+    // Test empty string
+    componentTest.assertEqual(component.safeStringify(''), 'Empty string', 'Should handle empty string');
+    
+    // Test normal string
+    componentTest.assertEqual(component.safeStringify('test'), 'test', 'Should return normal string as-is');
+    
+    // Test objects
+    const obj = { key: 'value' };
+    const stringified = component.safeStringify(obj);
+    componentTest.assert(typeof stringified === 'string', 'Should convert object to string');
+    componentTest.assert(stringified.length > 0, 'Should produce non-empty string');
+});
+
+componentTest.test('ErrorBoundary methods handle null error state gracefully', () => {
+    const component = errorBoundary();
+    
+    // Test getUserFriendlyMessage with null error
+    const friendlyMessage = component.getUserFriendlyMessage();
+    componentTest.assertEqual(friendlyMessage, 'An unknown error occurred', 'Should return fallback message for null error');
+    
+    // Test canRetry with null error
+    const canRetry = component.canRetry();
+    componentTest.assertEqual(canRetry, false, 'Should return false for retry when no error');
+    
+    // Test getSuggestedActions with null error
+    const actions = component.getSuggestedActions();
+    componentTest.assert(Array.isArray(actions), 'Should return array of actions');
+    componentTest.assert(actions.length > 0, 'Should return fallback actions');
+    
+    // Test getErrorIcon with null error
+    const icon = component.getErrorIcon();
+    componentTest.assertEqual(icon, '❌', 'Should return default error icon');
+});
+
 // Test DarkModeToggle Component
 componentTest.test('DarkModeToggle component exists and is function', () => {
     componentTest.assertType(darkModeToggle, 'function', 'darkModeToggle should be a function');

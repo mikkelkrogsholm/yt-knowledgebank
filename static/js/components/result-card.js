@@ -235,9 +235,22 @@ function resultCard() {
             return `${Math.round(weight * 100)}%`;
         },
         
-        formatScore(score) {
-            if (typeof score !== 'number') return '0%';
-            return `${Math.round(score * 100)}%`;
+        formatScore(rank) {
+            // Convert FTS5 BM25 rank (negative value, closer to 0 = better match) 
+            // to positive percentage (higher = better match)
+            // FTS5 ranks typically range from 0 to -5 or lower
+            
+            if (!rank || rank === 0) return '100%';
+            
+            // Since rank is negative, we need to convert it to a positive scale
+            // Better matches have ranks closer to 0 (like -0.001)
+            // Worse matches have more negative ranks (like -4.5)
+            
+            // Use exponential decay to convert negative rank to percentage
+            // This ensures better matches (closer to 0) get higher percentages
+            const normalizedScore = Math.max(0, Math.min(100, Math.exp(rank) * 100));
+            
+            return `${Math.round(normalizedScore)}%`;
         },
         
         formatHighlightedText(text) {

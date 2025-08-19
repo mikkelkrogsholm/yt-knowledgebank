@@ -66,6 +66,18 @@ YouTube Knowledgebank is an intelligent knowledge extraction and retrieval syste
 ## Development Guidelines
 See `context/git-strategy.md` for detailed development workflow, security guidelines, and git branching strategy.
 
+## Troubleshooting
+Having issues? We have comprehensive troubleshooting resources:
+- **[Quick Reference](docs/quick-troubleshooting.md)** - Fast fixes for common problems
+- **[Complete Guide](docs/troubleshooting-guide.md)** - Detailed solutions covering:
+  - JavaScript & Frontend Errors
+  - Video Processing Issues  
+  - Search Problems
+  - Performance Issues
+  - API Configuration Problems
+  - Database Issues
+  - Docker & Development Setup
+
 ## Knowledge Bank Development
 - **PRD**: See `context/knowledge-bank-prd.md` for detailed feature specifications
 - **TODO**: See `context/knowledge-bank-todo.md` for modular development plan

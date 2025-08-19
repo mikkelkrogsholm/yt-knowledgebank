@@ -19,7 +19,7 @@ import openai
 from sqlalchemy.orm import Session
 
 from app.database import Topic, VideoTopic, Video, TranscriptChunk
-from app.settings import get_openai_api_key, get_model_config
+from app.settings import get_openai_api_key, get_model_config, get_ai_prompts
 
 
 @dataclass
@@ -106,7 +106,25 @@ class TopicExtractor:
             return []
     
     def _build_topic_prompt(self, text: str) -> str:
-        """Build the topic extraction prompt."""
+        """Build the topic extraction prompt using customizable prompts."""
+        try:
+            # Get custom prompts from settings
+            prompts = get_ai_prompts()
+            template = prompts.get("topic_modeling", "")
+            
+            if template:
+                return f"{template}\n\nText to analyze:\n{text}"
+            else:
+                # Use default if no custom prompt
+                return self._build_default_topic_prompt(text)
+                
+        except Exception as e:
+            # Fallback to default behavior if settings fail
+            print(f"Error getting custom topic prompt, using default: {e}")
+            return self._build_default_topic_prompt(text)
+    
+    def _build_default_topic_prompt(self, text: str) -> str:
+        """Fallback method with default topic extraction prompt."""
         return f"""Identify 1-3 main topics discussed in this transcript chunk. Return JSON with:
 {{
   "topics": [

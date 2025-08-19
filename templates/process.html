@@ -88,6 +88,163 @@
 
 <script>
 let currentEventSource = null;
+const currentTask = {{ current_task | tojson if current_task else "null" }};
+
+// Initialize page based on current task
+document.addEventListener('DOMContentLoaded', function() {
+    if (currentTask && currentTask.task_id) {
+        console.log('Resuming processing session for task:', currentTask.task_id);
+        
+        // Update URL without page refresh if not already there
+        const urlParams = new URLSearchParams(window.location.search);
+        if (!urlParams.get('task_id')) {
+            const newUrl = new URL(window.location);
+            newUrl.searchParams.set('task_id', currentTask.task_id);
+            window.history.replaceState({}, '', newUrl);
+        }
+        
+        // Show appropriate UI based on task status
+        const phase = currentTask.phase;
+        if (phase === 'completed') {
+            showCompletedTask(currentTask);
+        } else if (phase === 'error') {
+            showErrorTask(currentTask);
+        } else if (phase === 'downloading' || phase === 'transcribing') {
+            resumeProgressTracking(currentTask.task_id);
+        }
+        
+        // Disable the form while processing
+        if (phase === 'downloading' || phase === 'transcribing') {
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Processing...';
+        }
+    }
+});
+
+function showCompletedTask(task) {
+    document.getElementById('successContainer').classList.remove('hidden');
+    if (task.metadata && task.transcript) {
+        displayResults({
+            metadata: task.metadata,
+            transcript: task.transcript
+        });
+    }
+}
+
+function showErrorTask(task) {
+    document.getElementById('errorContainer').classList.remove('hidden');
+    document.getElementById('errorMessage').textContent = task.error || 'Processing failed';
+}
+
+function resumeProgressTracking(taskId) {
+    const progressContainer = document.getElementById('progressContainer');
+    const errorContainer = document.getElementById('errorContainer');
+    const successContainer = document.getElementById('successContainer');
+    
+    // Reset UI
+    errorContainer.classList.add('hidden');
+    successContainer.classList.add('hidden');
+    progressContainer.classList.remove('hidden');
+    
+    // Connect to SSE for progress
+    connectToProgressStream(taskId);
+}
+
+function connectToProgressStream(taskId) {
+    if (currentEventSource) {
+        currentEventSource.close();
+    }
+    
+    currentEventSource = new EventSource(`/progress/${taskId}`);
+    
+    currentEventSource.onmessage = function(event) {
+        const data = JSON.parse(event.data);
+        updateProgressUI(data, taskId);
+    };
+    
+    currentEventSource.onerror = function(event) {
+        console.error('SSE Error:', event);
+        currentEventSource.close();
+        currentEventSource = null;
+        
+        document.getElementById('progressContainer').classList.add('hidden');
+        document.getElementById('errorContainer').classList.remove('hidden');
+        document.getElementById('errorMessage').textContent = 'Connection lost during processing';
+        
+        // Re-enable form
+        const submitBtn = document.getElementById('submitBtn');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Process Video';
+    };
+}
+
+function updateProgressUI(data, taskId) {
+    const percent = data.percent || 0;
+    const phase = data.phase || 'unknown';
+    const status = data.status || '';
+    
+    // Update progress bar
+    document.getElementById('progressBar').style.width = `${percent}%`;
+    
+    // Update text based on phase
+    let statusText = `${percent}% - ${status}`;
+    if (phase === 'downloading') {
+        document.getElementById('progressContainer').querySelector('h3').textContent = 'Downloading Audio...';
+    } else if (phase === 'transcribing') {
+        document.getElementById('progressContainer').querySelector('h3').textContent = 'Transcribing Audio...';
+    }
+    
+    document.getElementById('progressText').textContent = statusText;
+    
+    if (phase === 'completed') {
+        currentEventSource.close();
+        currentEventSource = null;
+        
+        // Hide progress and show success
+        setTimeout(async () => {
+            document.getElementById('progressContainer').classList.add('hidden');
+            document.getElementById('successContainer').classList.remove('hidden');
+            
+            // Fetch and display results
+            try {
+                const resultResponse = await fetch(`/result/${taskId}`);
+                const result = await resultResponse.json();
+                displayResults(result);
+            } catch (error) {
+                console.error('Error fetching results:', error);
+                document.getElementById('filename').textContent = 'Processing completed (error loading details)';
+            }
+            
+            // Re-enable form and clear URL parameter
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Process Video';
+            
+            // Clear task_id from URL
+            const newUrl = new URL(window.location);
+            newUrl.searchParams.delete('task_id');
+            window.history.replaceState({}, '', newUrl);
+        }, 500);
+    } else if (phase === 'error') {
+        currentEventSource.close();
+        currentEventSource = null;
+        
+        document.getElementById('progressContainer').classList.add('hidden');
+        document.getElementById('errorContainer').classList.remove('hidden');
+        document.getElementById('errorMessage').textContent = data.error || 'Unknown error occurred';
+        
+        // Re-enable form
+        const submitBtn = document.getElementById('submitBtn');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Process Video';
+        
+        // Clear task_id from URL
+        const newUrl = new URL(window.location);
+        newUrl.searchParams.delete('task_id');
+        window.history.replaceState({}, '', newUrl);
+    }
+}
 
 document.getElementById('videoForm').addEventListener('submit', async function(e) {
     e.preventDefault();
@@ -118,89 +275,18 @@ document.getElementById('videoForm').addEventListener('submit', async function(e
             throw new Error('Failed to start download');
         }
         
-        const { task_id } = await response.json();
+        const { task_id, redirect_url } = await response.json();
+        
+        // Update URL with task_id
+        if (redirect_url) {
+            window.history.pushState({}, '', redirect_url);
+        }
         
         // Show progress bar
         progressContainer.classList.remove('hidden');
         
-        // Close any existing EventSource
-        if (currentEventSource) {
-            currentEventSource.close();
-        }
-        
-        // Connect to SSE for progress
-        currentEventSource = new EventSource(`/progress/${task_id}`);
-        
-        currentEventSource.onmessage = function(event) {
-            const data = JSON.parse(event.data);
-            const percent = data.percent || 0;
-            const phase = data.phase || 'unknown';
-            const status = data.status || '';
-            
-            // Update progress bar
-            document.getElementById('progressBar').style.width = `${percent}%`;
-            
-            // Update text based on phase
-            let statusText = `${percent}% - ${status}`;
-            if (phase === 'downloading') {
-                document.getElementById('progressContainer').querySelector('h3').textContent = 'Downloading Audio...';
-            } else if (phase === 'transcribing') {
-                document.getElementById('progressContainer').querySelector('h3').textContent = 'Transcribing Audio...';
-            }
-            
-            document.getElementById('progressText').textContent = statusText;
-            
-            if (phase === 'completed') {
-                currentEventSource.close();
-                currentEventSource = null;
-                
-                // Hide progress and show success
-                setTimeout(async () => {
-                    progressContainer.classList.add('hidden');
-                    successContainer.classList.remove('hidden');
-                    
-                    // Fetch and display results
-                    try {
-                        const resultResponse = await fetch(`/result/${task_id}`);
-                        const result = await resultResponse.json();
-                        
-                        displayResults(result);
-                    } catch (error) {
-                        console.error('Error fetching results:', error);
-                        document.getElementById('filename').textContent = 'Processing completed (error loading details)';
-                    }
-                    
-                    // Re-enable form
-                    submitBtn.disabled = false;
-                    submitBtn.textContent = 'Process Video';
-                }, 500);
-            } else if (phase === 'error') {
-                currentEventSource.close();
-                currentEventSource = null;
-                
-                progressContainer.classList.add('hidden');
-                errorContainer.classList.remove('hidden');
-                document.getElementById('errorMessage').textContent = data.error || 'Unknown error occurred';
-                
-                // Re-enable form
-                submitBtn.disabled = false;
-                submitBtn.textContent = 'Process Video';
-            }
-        };
-        
-        currentEventSource.onerror = function(event) {
-            console.error('SSE Error:', event);
-            currentEventSource.close();
-            currentEventSource = null;
-            
-            progressContainer.classList.add('hidden');
-            errorContainer.classList.remove('hidden');
-            document.getElementById('errorMessage').textContent = 'Connection lost during download';
-            
-            // Re-enable form
-            submitBtn.disabled = false;
-            submitBtn.textContent = 'Process Video';
-        };
+        // Connect to progress stream
+        connectToProgressStream(task_id);
         
     } catch (error) {
         console.error('Error:', error);

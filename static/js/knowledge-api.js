@@ -289,6 +289,22 @@ class KnowledgeAPI {
     
     
     /**
+     * Get processing status for dashboard
+     * @returns {Promise<Object>} Processing status
+     */
+    async getProcessingStatus() {
+        this.setLoading('processing_status', true);
+        
+        try {
+            const url = this.buildURL('/api/dashboard/processing');
+            const result = await this.makeRequest(url);
+            return result;
+        } finally {
+            this.setLoading('processing_status', false);
+        }
+    }
+    
+    /**
      * Get recent processed videos
      * @param {Object} options - Query options
      * @returns {Promise<Object>} Recent videos
