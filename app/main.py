@@ -39,6 +39,7 @@ class SearchResultResponse(BaseModel):
     highlighted_text: str
     rank: float
     word_count: int
+    video_title: Optional[str] = None
 
 class SearchResponse(BaseModel):
     query: str
@@ -173,9 +174,20 @@ async def videos_overview(request: Request):
     })
 
 @app.get("/process", response_class=HTMLResponse)
-async def process_page(request: Request):
+async def process_page(request: Request, task_id: Optional[str] = Query(None)):
     """Video processing page"""
-    return templates.TemplateResponse("process.html", {"request": request})
+    # Check if there's an ongoing processing task
+    current_processing_task = None
+    if task_id and task_id in progress_store:
+        current_processing_task = {
+            "task_id": task_id,
+            **progress_store[task_id]
+        }
+    
+    return templates.TemplateResponse("process.html", {
+        "request": request,
+        "current_task": current_processing_task
+    })
 
 @app.post("/process")
 async def process_video(url: str = Form(...)):
@@ -186,7 +198,7 @@ async def process_video(url: str = Form(...)):
     task_id = str(uuid.uuid4())
     # Start download + transcribe in background
     asyncio.create_task(process_and_transcribe(url, task_id, api_key))
-    return JSONResponse({"task_id": task_id})
+    return JSONResponse({"task_id": task_id, "redirect_url": f"/process?task_id={task_id}"})
 
 @app.get("/progress/{task_id}")
 async def get_progress(task_id: str):
@@ -444,7 +456,8 @@ async def search_transcripts(search_request: SearchRequest):
                 text=result.text,
                 highlighted_text=result.highlighted_text,
                 rank=result.rank,
-                word_count=result.word_count
+                word_count=result.word_count,
+                video_title=result.video_title
             ) for result in results
         ]
         
@@ -851,23 +864,25 @@ async def get_processing_status():
     """Get current processing status"""
     try:
         # Check actual processing status from progress store
-        processing_jobs = [k for k in progress_store.keys() if progress_store[k].get('status') == 'processing']
-        queue_length = len(processing_jobs)
-        
-        # Find current job
+        processing_jobs = []
         current_job = None
-        for task_id in processing_jobs:
-            progress = progress_store[task_id]
-            current_job = {
-                "video_id": task_id,
-                "title": progress.get('title', 'Unknown Video'),
-                "stage": progress.get('stage', 'unknown'),
-                "progress": progress.get('progress', 0)
-            }
-            break  # Take the first processing job
+        
+        for task_id, progress_data in progress_store.items():
+            phase = progress_data.get('phase', '')
+            if phase in ['downloading', 'transcribing']:
+                current_job = {
+                    "task_id": task_id,
+                    "title": progress_data.get('metadata', {}).get('title', 'Processing...'),
+                    "phase": phase,
+                    "percent": progress_data.get('percent', 0),
+                    "status": progress_data.get('status', ''),
+                    "url": f"/process?task_id={task_id}"
+                }
+                processing_jobs.append(task_id)
+                break  # Take the first active processing job
         
         return JSONResponse({
-            "queue_length": queue_length,
+            "queue_length": len(processing_jobs),
             "in_progress": 1 if current_job else 0,
             "current_job": current_job
         })

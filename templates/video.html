@@ -410,10 +410,69 @@ if (searchInput) {
     });
 }
 
+// Check for timestamp parameter in URL and seek to it
+function checkForTimestampParam() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const timestamp = urlParams.get('t');
+    
+    if (timestamp && !isNaN(timestamp)) {
+        const seconds = parseInt(timestamp, 10);
+        console.log('Found timestamp parameter, seeking to', seconds, 'seconds');
+        seekToTime(seconds);
+        
+        // Also scroll to the relevant transcript segment
+        setTimeout(() => {
+            scrollToTranscriptSegment(seconds);
+        }, 1000); // Wait a bit for transcript to load
+    }
+}
+
+// Scroll to the transcript segment closest to the given timestamp
+function scrollToTranscriptSegment(targetSeconds) {
+    const transcriptCards = document.querySelectorAll('.transcript-card');
+    let closestCard = null;
+    let closestDiff = Infinity;
+    
+    transcriptCards.forEach(card => {
+        const timeElement = card.querySelector('.text-blue-600');
+        if (timeElement) {
+            const timeText = timeElement.textContent.match(/\[(\d{2}):(\d{2})\.(\d{3})\]/);
+            if (timeText) {
+                const cardSeconds = parseInt(timeText[1]) * 60 + parseInt(timeText[2]) + parseInt(timeText[3]) / 1000;
+                const diff = Math.abs(cardSeconds - targetSeconds);
+                
+                if (diff < closestDiff) {
+                    closestDiff = diff;
+                    closestCard = card;
+                }
+            }
+        }
+    });
+    
+    if (closestCard) {
+        closestCard.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'center' 
+        });
+        // Add a temporary highlight
+        closestCard.style.backgroundColor = '#fef3c7'; // yellow-100
+        closestCard.style.borderLeftColor = '#f59e0b'; // yellow-500
+        setTimeout(() => {
+            closestCard.style.backgroundColor = '';
+            closestCard.style.borderLeftColor = '';
+        }, 3000);
+    }
+}
+
 // Format transcript on page load
 document.addEventListener('DOMContentLoaded', function() {
     if (transcriptData && Object.keys(transcriptData).length > 0) {
         displayTranscript(transcriptData);
+        // Check for timestamp parameter after transcript loads
+        setTimeout(checkForTimestampParam, 500);
+    } else {
+        // Still check for timestamp even if no transcript
+        checkForTimestampParam();
     }
 });
 </script>

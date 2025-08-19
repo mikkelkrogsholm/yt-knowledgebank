@@ -23,6 +23,7 @@ class SearchResult:
     highlighted_text: str
     rank: float
     word_count: int
+    video_title: Optional[str] = None
 
 
 class SearchManager:
@@ -153,7 +154,8 @@ class SearchManager:
                     text=row[5],
                     highlighted_text=highlighted_text,
                     rank=row[6],
-                    word_count=row[7]
+                    word_count=row[7],
+                    video_title=row[8] if len(row) > 8 else None
                 )
                 results.append(result)
             
@@ -213,14 +215,12 @@ class SearchManager:
                 tc.end_ms,
                 tc.text,
                 rank,
-                tc.word_count
+                tc.word_count,
+                v.title as video_title
             FROM transcript_chunks_fts
             JOIN transcript_chunks tc ON tc.id = transcript_chunks_fts.rowid
+            JOIN videos v ON v.id = tc.video_id
         """
-        
-        # Add video table join if date filtering is needed
-        if start_date is not None or end_date is not None:
-            sql += " JOIN videos v ON v.id = tc.video_id"
         
         # Build WHERE clause
         where_conditions = ["transcript_chunks_fts MATCH ?"]
