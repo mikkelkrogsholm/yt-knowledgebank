@@ -16,40 +16,48 @@ function errorBoundary() {
         errorId: null,
         
         init() {
-            // Listen for global errors
+            // Listen for global errors but filter out Alpine.js internal errors
             eventSystem.on('error', (errorData) => {
+                // Skip errors that are likely from Alpine.js internal handling
+                if (errorData.context === 'Global error' && 
+                    (!errorData.error || errorData.error.message === 'Unknown error occurred')) {
+                    return;
+                }
                 this.handleError(errorData.error, errorData.context);
             });
-            
-            // Listen for component-specific errors
-            this.setupErrorHandling();
-        },
-        
-        setupErrorHandling() {
-            // Wrap Alpine.js component methods to catch errors
-            const originalInit = this.init;
-            this.init = function(...args) {
-                try {
-                    return originalInit.apply(this, args);
-                } catch (error) {
-                    this.handleError(error, 'Component initialization');
-                }
-            };
         },
         
         handleError(error, context = 'Unknown') {
+            // Ignore null/undefined errors and "unknown error occurred" errors
+            // that come from Alpine.js internal handling to prevent cascading error dialogs
+            if (!error || 
+                (error.message && error.message.includes('Unknown error occurred')) ||
+                (context === 'Global error' && !error.message)) {
+                console.warn('Ignoring cascade error:', error, context);
+                return;
+            }
+            
             this.hasError = true;
-            this.error = error;
+            
+            // Handle errors properly
+            if (error instanceof Error) {
+                this.error = error;
+                this.errorMessage = error.message || 'Error occurred';
+            } else {
+                this.error = new Error(String(error));
+                this.errorMessage = String(error);
+            }
+            
             this.errorContext = context;
             this.errorId = this.generateErrorId();
             this.showDetails = false;
             
             // Log error for debugging
-            console.error(`[ErrorBoundary] ${context}:`, error);
+            console.error(`[ErrorBoundary] ${context}:`, this.error);
             
             // Emit error handled event
             eventSystem.emit('errorHandled', {
-                error,
+                error: this.error,
                 context,
                 errorId: this.errorId,
                 component: this
@@ -67,7 +75,7 @@ function errorBoundary() {
         getUserFriendlyMessage() {
             if (!this.error) return 'An unknown error occurred';
             
-            const errorMessage = this.error.message || '';
+            const errorMessage = this.errorMessage || this.error?.message || '';
             
             // Network errors
             if (errorMessage.includes('fetch') || errorMessage.includes('Network')) {
@@ -221,7 +229,7 @@ function errorBoundary() {
         canRetry() {
             if (!this.error) return false;
             
-            const errorMessage = this.error.message || '';
+            const errorMessage = this.errorMessage || this.error?.message || '';
             
             // Don't retry on client errors (4xx)
             if (errorMessage.includes('400') || 
@@ -242,7 +250,7 @@ function errorBoundary() {
         getSuggestedActions() {
             if (!this.error) return [];
             
-            const errorMessage = this.error.message || '';
+            const errorMessage = this.errorMessage || this.error?.message || '';
             const actions = [];
             
             if (errorMessage.includes('Network') || errorMessage.includes('fetch')) {
@@ -284,24 +292,8 @@ function globalErrorBoundary() {
             // Call parent init
             errorBoundary().init.call(this);
             
-            // Set up global error handlers
-            window.addEventListener('error', (event) => {
-                this.handleError(event.error, 'Global JavaScript error');
-            });
-            
-            window.addEventListener('unhandledrejection', (event) => {
-                this.handleError(event.reason, 'Unhandled Promise rejection');
-            });
-            
-            // Handle Alpine.js errors
-            document.addEventListener('alpine:init', () => {
-                Alpine.store('errors', {
-                    boundary: this,
-                    handle(error, context) {
-                        this.boundary.handleError(error, context);
-                    }
-                });
-            });
+            // Note: Global error handlers are already set up in event-system.js
+            // This avoids duplicate error handling that could cause cascading errors
         }
     };
 }

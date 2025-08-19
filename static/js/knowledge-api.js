@@ -14,7 +14,7 @@ class KnowledgeAPI {
         this.requestTimeout = 30000; // 30 seconds
         
         // Use fetch or injected fetch for testing
-        this.fetch = this.fetch || window.fetch;
+        this.fetch = this.fetch || window.fetch.bind(window);
     }
     
     /**
@@ -75,10 +75,14 @@ class KnowledgeAPI {
             ...options,
             signal: controller.signal,
             headers: {
-                'Content-Type': 'application/json',
                 ...options.headers
             }
         };
+        
+        // Only add Content-Type for POST/PUT/PATCH requests with a body
+        if (options.method && ['POST', 'PUT', 'PATCH'].includes(options.method.toUpperCase()) && options.body) {
+            requestOptions.headers['Content-Type'] = 'application/json';
+        }
         
         try {
             const response = await this.fetch(url, requestOptions);
@@ -114,7 +118,7 @@ class KnowledgeAPI {
         
         try {
             const params = {
-                query,
+                q: query,
                 limit: 50,
                 offset: 0,
                 ...options
@@ -261,6 +265,46 @@ class KnowledgeAPI {
             return result;
         } finally {
             this.setLoading('search_stats', false);
+        }
+    }
+    
+    // Dashboard API Methods
+    
+    /**
+     * Get knowledge base statistics for dashboard
+     * @returns {Promise<Object>} Knowledge statistics
+     */
+    async getKnowledgeStats() {
+        this.setLoading('knowledge_stats', true);
+        
+        try {
+            const url = this.buildURL('/api/dashboard/stats');
+            const result = await this.makeRequest(url);
+            return result;
+        } finally {
+            this.setLoading('knowledge_stats', false);
+        }
+    }
+    
+    
+    
+    /**
+     * Get recent processed videos
+     * @param {Object} options - Query options
+     * @returns {Promise<Object>} Recent videos
+     */
+    async getRecentVideos(options = {}) {
+        this.setLoading('recent_videos', true);
+        
+        try {
+            const params = new URLSearchParams();
+            if (options.limit) params.append('limit', options.limit);
+            
+            const url = this.buildURL('/api/videos/recent', params);
+            const result = await this.makeRequest(url);
+            return result;
+        } finally {
+            this.setLoading('recent_videos', false);
         }
     }
     

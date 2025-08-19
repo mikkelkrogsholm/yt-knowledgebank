@@ -157,8 +157,15 @@ async def startup_event():
         # Continue startup anyway - the app can function with JSON files only
 
 @app.get("/", response_class=HTMLResponse)
-async def overview(request: Request):
-    """Main overview page showing all processed videos"""
+async def dashboard(request: Request):
+    """Knowledge Dashboard - main landing page"""
+    return templates.TemplateResponse("dashboard.html", {
+        "request": request
+    })
+
+@app.get("/videos", response_class=HTMLResponse)
+async def videos_overview(request: Request):
+    """Video library overview page"""
     videos = get_all_videos()
     return templates.TemplateResponse("index.html", {
         "request": request,
@@ -775,6 +782,141 @@ async def get_qa_sessions(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to get Q&A sessions: {str(e)}"
+        )
+
+# Dashboard API Endpoints
+@app.get("/api/dashboard/stats")
+async def get_knowledge_stats():
+    """Get knowledge base statistics for dashboard"""
+    try:
+        videos = get_all_videos()
+        total_videos = len(videos)
+        total_hours = sum(v.get('duration', 0) for v in videos) / 3600
+        
+        return JSONResponse({
+            "total_videos": total_videos,
+            "total_hours": round(total_hours, 1)
+        })
+    except Exception as e:
+        return JSONResponse(
+            {"error": f"Failed to get stats: {str(e)}"},
+            status_code=500
+        )
+
+@app.get("/api/dashboard/summaries")
+async def get_recent_summaries(limit: int = Query(5, ge=1, le=20)):
+    """Get recent AI-generated summaries"""
+    try:
+        # No real summaries implemented yet - return empty list
+        return JSONResponse({
+            "summaries": [],
+            "total_count": 0
+        })
+    except Exception as e:
+        return JSONResponse(
+            {"error": f"Failed to get summaries: {str(e)}"},
+            status_code=500
+        )
+
+@app.get("/api/dashboard/topics")
+async def get_topic_trends(limit: int = Query(10, ge=1, le=50)):
+    """Get trending topics"""
+    try:
+        # No real topic analysis implemented yet - return empty list
+        return JSONResponse({
+            "topics": []
+        })
+    except Exception as e:
+        return JSONResponse(
+            {"error": f"Failed to get topics: {str(e)}"},
+            status_code=500
+        )
+
+@app.get("/api/dashboard/entities")
+async def get_entity_highlights(limit: int = Query(10, ge=1, le=50)):
+    """Get key entities discovered"""
+    try:
+        # No real entity extraction implemented yet - return empty list
+        return JSONResponse({
+            "entities": []
+        })
+    except Exception as e:
+        return JSONResponse(
+            {"error": f"Failed to get entities: {str(e)}"},
+            status_code=500
+        )
+
+@app.get("/api/dashboard/processing")
+async def get_processing_status():
+    """Get current processing status"""
+    try:
+        # Check actual processing status from progress store
+        processing_jobs = [k for k in progress_store.keys() if progress_store[k].get('status') == 'processing']
+        queue_length = len(processing_jobs)
+        
+        # Find current job
+        current_job = None
+        for task_id in processing_jobs:
+            progress = progress_store[task_id]
+            current_job = {
+                "video_id": task_id,
+                "title": progress.get('title', 'Unknown Video'),
+                "stage": progress.get('stage', 'unknown'),
+                "progress": progress.get('progress', 0)
+            }
+            break  # Take the first processing job
+        
+        return JSONResponse({
+            "queue_length": queue_length,
+            "in_progress": 1 if current_job else 0,
+            "current_job": current_job
+        })
+    except Exception as e:
+        return JSONResponse(
+            {"error": f"Failed to get processing status: {str(e)}"},
+            status_code=500
+        )
+
+@app.get("/api/dashboard/activity")
+async def get_recent_activity(limit: int = Query(10, ge=1, le=50)):
+    """Get recent user activity"""
+    try:
+        # No real activity tracking implemented yet - return empty list
+        return JSONResponse({
+            "activities": []
+        })
+    except Exception as e:
+        return JSONResponse(
+            {"error": f"Failed to get activity: {str(e)}"},
+            status_code=500
+        )
+
+@app.get("/api/videos/recent")
+async def get_recent_videos(limit: int = Query(5, ge=1, le=20)):
+    """Get recent processed videos"""
+    try:
+        videos = get_all_videos()
+        # Get the most recent videos (they're already sorted by date)
+        recent_videos = videos[:limit]
+        
+        # Transform to simpler format for dashboard
+        simplified_videos = []
+        for video in recent_videos:
+            simplified_videos.append({
+                "id": video.get("task_id"),
+                "title": video.get("title", "Unknown Title"),
+                "created_at": video.get("processed_date", video.get("upload_date", "")),
+                "duration": video.get("duration", 0)
+            })
+        
+        return JSONResponse({
+            "videos": simplified_videos,
+            "total_count": len(videos)
+        })
+    except Exception as e:
+        return JSONResponse(
+            {"error": f"Failed to get recent videos: {str(e)}"},
+            status_code=500
         )
 
 def run_migration_cli():

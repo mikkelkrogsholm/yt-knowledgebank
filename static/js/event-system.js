@@ -167,10 +167,20 @@ class EventSystem {
      * @param {string} context - Context where error occurred
      */
     handleError(error, context = 'Unknown') {
+        // Handle null/undefined errors gracefully - but don't emit error events for them
+        // as this can cause cascading error dialogs
+        if (!error) {
+            console.warn(`[${context}]`, 'Null or undefined error - ignoring to prevent cascade');
+            return;
+        }
+        
         console.error(`[${context}]`, error);
         
-        // Emit error event
-        this.emit('error', { error, context });
+        // Emit error event with safe error object
+        this.emit('error', { 
+            error: error instanceof Error ? error : new Error(String(error)), 
+            context 
+        });
         
         // Call registered error handlers
         this.errorHandlers.forEach(handler => {
@@ -230,14 +240,20 @@ class EventSystem {
      * Initialize error handling system
      */
     initializeErrorHandling() {
-        // Global error handler
+        // Global error handler with proper null checks
         window.addEventListener('error', (event) => {
-            this.handleError(event.error, 'Global error');
+            // Only handle real errors, ignore null/undefined errors from Alpine.js internal handling
+            if (event.error && event.error instanceof Error) {
+                this.handleError(event.error, 'Global error');
+            }
         });
         
-        // Unhandled promise rejection handler
+        // Unhandled promise rejection handler  
         window.addEventListener('unhandledrejection', (event) => {
-            this.handleError(event.reason, 'Unhandled promise rejection');
+            // Only handle real rejections
+            if (event.reason) {
+                this.handleError(event.reason, 'Unhandled promise rejection');
+            }
         });
         
         // Default error handler for notifications
