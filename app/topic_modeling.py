@@ -47,8 +47,8 @@ class TopicExtractor:
         if not self.api_key:
             raise ValueError("OpenAI API key not configured. Please set it in settings.")
         
-        # Set up OpenAI client
-        openai.api_key = self.api_key
+        # Set up OpenAI client (new v1.0+ pattern)
+        self.client = OpenAI(api_key=self.api_key)
         
         # Topic modeling configuration
         self.model = self.model_config["models"]["topic_modeling"]
@@ -68,7 +68,7 @@ class TopicExtractor:
         try:
             prompt = self._build_topic_prompt(text)
             
-            response = openai.ChatCompletion.create(
+            response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
                     {

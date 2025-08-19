@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from typing import List, Dict, Optional, Any
 from dataclasses import dataclass
 
-import openai
+from openai import OpenAI
 from sqlalchemy.orm import Session
 
 from app.database import Summary, Video, Entity, Topic, TranscriptChunk
@@ -44,8 +44,8 @@ class SummaryGenerator:
         if not self.api_key:
             raise ValueError("OpenAI API key not configured. Please set it in settings.")
         
-        # Set up OpenAI client
-        openai.api_key = self.api_key
+        # Set up OpenAI client (new v1.0+ pattern)
+        self.client = OpenAI(api_key=self.api_key)
         
         # Summarization model configuration
         self.model = self.model_config["models"]["summarization"]
@@ -67,7 +67,7 @@ class SummaryGenerator:
         try:
             prompt = self._build_summary_prompt(text, summary_type, focus)
             
-            response = openai.ChatCompletion.create(
+            response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
                     {
